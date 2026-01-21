@@ -275,6 +275,51 @@ export const update = mutation({
 });
 
 /**
+ * Set a person's profile photo
+ */
+export const setProfilePhoto = mutation({
+    args: {
+        personId: v.id("people"),
+        mediaId: v.id("media")
+    },
+    handler: async (ctx, args) => {
+        const person = await ctx.db.get(args.personId);
+        if (!person) throw new Error("Person not found");
+
+        const media = await ctx.db.get(args.mediaId);
+        if (!media) throw new Error("Media not found");
+
+        if (media.ownerPersonId !== args.personId) {
+            throw new Error("Profile photos must be owned by the person");
+        }
+
+        if (media.treeId !== person.treeId) {
+            throw new Error("Media belongs to a different tree");
+        }
+
+        const { userId } = await requireTreeAdmin(ctx, person.treeId);
+        const now = Date.now();
+
+        await ctx.db.patch(args.personId, {
+            profilePhotoId: args.mediaId,
+            updatedAt: now
+        });
+
+        await ctx.db.insert("auditLog", {
+            treeId: person.treeId,
+            userId,
+            action: "person_profile_photo_set",
+            entityType: "person",
+            entityId: args.personId,
+            changes: { profilePhotoId: args.mediaId },
+            timestamp: now
+        });
+
+        return args.personId;
+    }
+});
+
+/**
  * Delete a person (and related data)
  */
 export const remove = mutation({

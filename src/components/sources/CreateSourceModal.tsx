@@ -1,18 +1,22 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Doc, Id } from '../../../convex/_generated/dataModel';
+import { MediaUploadModal } from '../media/MediaUploadModal';
+import { formatClaimDate } from '../../utils/claimDates';
 
 export function CreateSourceModal({
     treeId,
     onClose,
     onSuccess,
     claims,
+    personId,
 }: {
     treeId: Id<"trees">;
     onClose: () => void;
     onSuccess?: (sourceId: Id<"sources">) => void;
     claims?: Doc<"claims">[];
+    personId?: Id<"people">;
 }) {
     const [formData, setFormData] = useState({
         title: '',
@@ -21,8 +25,17 @@ export function CreateSourceModal({
         userNotes: '',
     });
     const [selectedClaimId, setSelectedClaimId] = useState<Id<"claims"> | "">('');
+    const [mediaOwnerPersonId, setMediaOwnerPersonId] = useState<Id<"people"> | "">(personId ?? '');
+    const [selectedMediaIds, setSelectedMediaIds] = useState<Id<"media">[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showMediaUpload, setShowMediaUpload] = useState(false);
     const createSource = useMutation(api.sources.create);
+    const updateMediaLinks = useMutation(api.media.updateLinks);
+    const people = useQuery(api.people.list, { treeId, limit: 200 });
+    const mediaList = useQuery(
+        api.media.listByPerson,
+        mediaOwnerPersonId ? { personId: mediaOwnerPersonId as Id<"people"> } : "skip"
+    ) as Array<Doc<"media"> & { storageUrl?: string | null }> | undefined;
 
     const claimOptions = useMemo(() => {
         if (!claims) return [];
@@ -33,10 +46,11 @@ export function CreateSourceModal({
                 ? customFields?.title || 'Custom event'
                 : claim.claimType.replace('_', ' ');
             const title = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
-            const dateLabel = claim.value.date ? ` - ${claim.value.date}` : '';
+            const dateLabel = formatClaimDate(claim.value);
+            const dateSuffix = dateLabel ? ` - ${dateLabel}` : '';
             return {
                 id: claim._id,
-                label: `${title}${dateLabel}`,
+                label: `${title}${dateSuffix}`,
             };
         });
     }, [claims]);
@@ -55,6 +69,14 @@ export function CreateSourceModal({
                 notes: formData.userNotes || undefined,
                 claimId: selectedClaimId || undefined,
             });
+            if (mediaOwnerPersonId) {
+                await updateMediaLinks({
+                    treeId,
+                    entityType: "source",
+                    entityId: sourceId,
+                    mediaIds: selectedMediaIds
+                });
+            }
             if (onSuccess) onSuccess(sourceId);
             onClose();
         } catch (error) {
@@ -138,6 +160,60 @@ export function CreateSourceModal({
                                 <p className="text-xs text-muted">Optional. Connect this source to a life event.</p>
                             </div>
                         )}
+
+                        <div className="input-group">
+                            <label className="input-label">Media</label>
+                            <p className="text-xs text-muted">Optional. Attach media to this source.</p>
+                            {!personId && (
+                                <select
+                                    className="input"
+                                    value={mediaOwnerPersonId}
+                                    onChange={(event) => {
+                                        setMediaOwnerPersonId(event.target.value as Id<"people"> | '');
+                                        setSelectedMediaIds([]);
+                                    }}
+                                >
+                                    <option value="">Select a person to own media...</option>
+                                    {(people ?? []).map((person: Doc<"people">) => (
+                                        <option key={person._id} value={person._id}>
+                                            {person.givenNames} {person.surnames}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                            {mediaOwnerPersonId && (
+                                <div className="border border-border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                                    {(mediaList ?? []).map((item) => (
+                                        <label key={item._id} className="flex items-center gap-2 text-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedMediaIds.includes(item._id)}
+                                                onChange={(event) => {
+                                                    if (event.target.checked) {
+                                                        setSelectedMediaIds((prev) => [...prev, item._id]);
+                                                    } else {
+                                                        setSelectedMediaIds((prev) => prev.filter((id) => id !== item._id));
+                                                    }
+                                                }}
+                                            />
+                                            <span>{item.title}</span>
+                                        </label>
+                                    ))}
+                                    {(mediaList?.length ?? 0) === 0 && (
+                                        <p className="text-xs text-muted">No media added yet.</p>
+                                    )}
+                                </div>
+                            )}
+                            {mediaOwnerPersonId && (
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowMediaUpload(true)}
+                                >
+                                    Add new media
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <div className="modal-footer">
                         <button type="button" className="btn btn-secondary" onClick={onClose}>
@@ -153,6 +229,17 @@ export function CreateSourceModal({
                     </div>
                 </form>
             </div>
+            {showMediaUpload && mediaOwnerPersonId && (
+                <MediaUploadModal
+                    treeId={treeId}
+                    ownerPersonId={mediaOwnerPersonId as Id<"people">}
+                    onClose={() => setShowMediaUpload(false)}
+                    onSuccess={(mediaId) => {
+                        setSelectedMediaIds((prev) => [...prev, mediaId]);
+                        setShowMediaUpload(false);
+                    }}
+                />
+            )}
         </>
     );
 }

@@ -41,16 +41,18 @@ const createClaim = vi.fn().mockResolvedValue('claim_1');
 const updateClaim = vi.fn();
 const addSource = vi.fn().mockResolvedValue('link_1');
 const removeSource = vi.fn();
+const updateMediaLinks = vi.fn();
 
 const createClaimMutation = createClaim as unknown as ReturnType<typeof useMutation>;
 const updateClaimMutation = updateClaim as unknown as ReturnType<typeof useMutation>;
 const addSourceMutation = addSource as unknown as ReturnType<typeof useMutation>;
 const removeSourceMutation = removeSource as unknown as ReturnType<typeof useMutation>;
+const updateMediaLinksMutation = updateMediaLinks as unknown as ReturnType<typeof useMutation>;
 
 describe('AddClaimModal', () => {
     beforeEach(() => {
         let queryCall = 0;
-        const queryResults = [places, people, sources];
+        const queryResults = [places, people, sources, [], []];
 
         vi.mocked(useQuery).mockImplementation(() => {
             const result = queryResults[queryCall % queryResults.length];
@@ -64,6 +66,7 @@ describe('AddClaimModal', () => {
             updateClaimMutation,
             addSourceMutation,
             removeSourceMutation,
+            updateMediaLinksMutation,
         ];
 
         vi.mocked(useMutation).mockImplementation(() => {
@@ -104,5 +107,26 @@ describe('AddClaimModal', () => {
                 sourceId: sources[0]._id,
             });
         });
+    });
+
+    it('toggles date range inputs for current claims', async () => {
+        const onClose = vi.fn();
+        const user = userEvent.setup();
+
+        render(
+            <AddClaimModal
+                treeId={treeId}
+                subjectId={personId}
+                onClose={onClose}
+                defaultClaimType="residence"
+            />
+        );
+
+        expect(screen.getByPlaceholderText('From (YYYY-MM-DD or YYYY)')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('To (YYYY-MM-DD or YYYY)')).toBeInTheDocument();
+
+        await user.click(screen.getByLabelText(/current/i));
+
+        expect(screen.queryByPlaceholderText('To (YYYY-MM-DD or YYYY)')).not.toBeInTheDocument();
     });
 });

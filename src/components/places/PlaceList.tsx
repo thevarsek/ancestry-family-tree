@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
@@ -6,8 +7,10 @@ import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { PlaceModal } from './PlaceModal';
 import { defaultLeafletIcon } from './leafletIcon';
+import { formatClaimDate } from '../../utils/claimDates';
 
 export function PlaceList({ treeId }: { treeId: Id<"trees"> }) {
+    const navigate = useNavigate();
     const places = useQuery(api.places.list, { treeId, limit: 100 });
     const [selectedPlaceId, setSelectedPlaceId] = useState<Id<"places"> | null>(null);
     const [showCreate, setShowCreate] = useState(false);
@@ -120,14 +123,18 @@ export function PlaceList({ treeId }: { treeId: Id<"trees"> }) {
                             selectedPlaceClaims.length > 0 ? (
                                 <div className="space-y-3">
                                     {selectedPlaceClaims.map((claim) => (
-                                        <div key={claim._id} className="border-b border-border-subtle pb-2">
+                                        <div
+                                            key={claim._id}
+                                            className={`border-b border-border-subtle pb-2 ${claim.person ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
+                                            onClick={claim.person ? () => navigate(`/tree/${treeId}/person/${claim.person!._id}`) : undefined}
+                                        >
                                             <div className="text-sm font-medium capitalize">
                                                 {claim.claimType === 'custom'
                                                     ? (claim.value.customFields as { title?: string } | undefined)?.title || 'Custom event'
                                                     : claim.claimType.replace('_', ' ')}
                                             </div>
                                             <div className="text-xs text-muted">
-                                                {claim.value.date || 'Unknown date'}
+                                                {formatClaimDate(claim.value) || 'Unknown date'}
                                                 {claim.person ? ` · ${claim.person.givenNames} ${claim.person.surnames}` : ''}
                                             </div>
                                         </div>

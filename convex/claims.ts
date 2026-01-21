@@ -23,6 +23,7 @@ const claimTypeValidator = v.union(
 const claimValueValidator = v.object({
     date: v.optional(v.string()),
     dateEnd: v.optional(v.string()),
+    isCurrent: v.optional(v.boolean()),
     datePrecision: v.optional(
         v.union(
             v.literal("exact"),

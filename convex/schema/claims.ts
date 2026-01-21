@@ -30,6 +30,7 @@ export const claimTables = {
         value: v.object({
             date: v.optional(v.string()),
             dateEnd: v.optional(v.string()),
+            isCurrent: v.optional(v.boolean()),
             datePrecision: v.optional(v.union(
                 v.literal("exact"),
                 v.literal("year"),

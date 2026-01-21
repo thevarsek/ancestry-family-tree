@@ -1,8 +1,9 @@
-import { useState, type FormEvent, useEffect } from 'react';
+import { useMemo, useState, type FormEvent, useEffect } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { Link } from 'react-router-dom';
 import { api } from '../../../convex/_generated/api';
 import { Doc, Id } from '../../../convex/_generated/dataModel';
+import { MediaUploadModal } from '../media/MediaUploadModal';
 
 type PersonGender = 'unknown' | 'male' | 'female' | 'other';
 
@@ -40,6 +41,7 @@ export function PersonModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const createPerson = useMutation(api.people.create);
     const updatePerson = useMutation(api.people.update);
+    const [showProfileUpload, setShowProfileUpload] = useState(false);
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
@@ -101,6 +103,19 @@ export function PersonModal({
                             </div>
                         </div>
 
+                        {personId && (
+                            <div className="input-group">
+                                <label className="input-label">Profile Photo</label>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowProfileUpload(true)}
+                                >
+                                    Upload Profile Photo
+                                </button>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4 mb-4">
                             <div className="input-group">
                                 <label className="input-label">Gender</label>
@@ -148,6 +163,15 @@ export function PersonModal({
                     </div>
                 </form>
             </div>
+            {showProfileUpload && personId && (
+                <MediaUploadModal
+                    treeId={treeId}
+                    ownerPersonId={personId}
+                    setAsProfilePhoto
+                    onClose={() => setShowProfileUpload(false)}
+                    onSuccess={() => setShowProfileUpload(false)}
+                />
+            )}
         </>
     );
 }
@@ -156,6 +180,16 @@ export const CreatePersonModal = PersonModal; // Backwards compatibility for now
 
 export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
     const people = useQuery(api.people.list, { treeId, limit: 100 });
+    const profilePhotoIds = useMemo(
+        () => (people ?? [])
+            .map((person) => person.profilePhotoId)
+            .filter((id): id is Id<"media"> => Boolean(id)),
+        [people]
+    );
+    const profilePhotos = useQuery(
+        api.media.getUrls,
+        profilePhotoIds.length ? { mediaIds: profilePhotoIds } : "skip"
+    ) as Array<{ mediaId: Id<"media">; storageUrl?: string | null }> | undefined;
     const [showCreate, setShowCreate] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -165,9 +199,15 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
         return fullName.includes(searchQuery.toLowerCase());
     });
 
-    if (people === undefined) {
+    if (people === undefined || profilePhotos === undefined) {
         return <div className="spinner spinner-lg mx-auto mt-8" />;
     }
+
+    const profilePhotoMap = new Map(
+        (profilePhotos ?? []).map((item: { mediaId: Id<"media">; storageUrl?: string | null }) =>
+            [item.mediaId, item.storageUrl ?? undefined]
+        )
+    );
 
     return (
         <div className="space-y-6">
@@ -200,10 +240,13 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
                         to={`/tree/${treeId}/person/${person._id}`}
                         className="card card-interactive cursor-pointer flex items-center gap-3 p-3 text-inherit no-underline hover:no-underline"
                     >
-                        <div className="avatar">
-                            {person.profilePhotoId ? (
-                                // TODO: Image component with Convex storage
-                                <span>IMG</span>
+                        <div className="avatar overflow-hidden">
+                            {person.profilePhotoId && profilePhotoMap.get(person.profilePhotoId) ? (
+                                <img
+                                    src={profilePhotoMap.get(person.profilePhotoId) ?? undefined}
+                                    alt={`${person.givenNames ?? ''} ${person.surnames ?? ''}`}
+                                    className="w-full h-full object-cover"
+                                />
                             ) : (
                                 <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>
                             )}

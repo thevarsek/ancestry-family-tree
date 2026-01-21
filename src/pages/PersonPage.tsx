@@ -12,6 +12,8 @@ import 'leaflet/dist/leaflet.css';
 import { defaultLeafletIcon } from '../components/places/leafletIcon';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { PersonSourceList } from '../components/sources/PersonSourceList';
+import { MediaList } from '../components/media/MediaList';
+import { formatClaimDate } from '../utils/claimDates';
 
 type PersonClaim = Doc<"claims"> & {
     place?: Doc<"places"> | null;
@@ -21,7 +23,7 @@ type PersonClaim = Doc<"claims"> & {
 export function PersonPage() {
     const { treeId, personId } = useParams<{ treeId: string; personId: string }>();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState<'overview' | 'relationships' | 'places' | 'sources'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'relationships' | 'places' | 'sources' | 'media'>('overview');
     const [showAddRel, setShowAddRel] = useState(false);
     const [showAddClaim, setShowAddClaim] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
@@ -48,6 +50,10 @@ export function PersonPage() {
 
     const relationships = useQuery(api.people.getRelationships,
         personId ? { personId: personId as Id<"people"> } : "skip"
+    );
+
+    const profilePhoto = useQuery(api.media.get,
+        person?.profilePhotoId ? { mediaId: person.profilePhotoId } : "skip"
     );
 
     const residenceClaims = useMemo(() => {
@@ -165,8 +171,16 @@ export function PersonPage() {
                 </div>
 
                 <div className="flex gap-6 items-start">
-                    <div className="avatar avatar-xl text-3xl">
-                        <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>
+                    <div className="avatar avatar-xl text-3xl overflow-hidden">
+                        {profilePhoto?.storageUrl ? (
+                            <img
+                                src={profilePhoto.storageUrl}
+                                alt={`${person.givenNames ?? ''} ${person.surnames ?? ''}`}
+                                className="w-full h-full object-cover"
+                            />
+                        ) : (
+                            <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>
+                        )}
                     </div>
                     <div className="flex-1">
                         <h1 className="text-3xl font-bold mb-1">
@@ -212,6 +226,12 @@ export function PersonPage() {
                 >
                     Sources
                 </button>
+                <button
+                    className={`tab ${activeTab === 'media' ? 'tab-active' : ''}`}
+                    onClick={() => setActiveTab('media')}
+                >
+                    Media
+                </button>
             </div>
 
             <div className="animate-fade-in">
@@ -241,7 +261,7 @@ export function PersonPage() {
                                         {person.claims.map((claim: PersonClaim) => (
                                             <div key={claim._id} className="flex gap-4">
                                                 <div className="w-24 text-sm text-muted text-right pt-1">
-                                                    {claim.value.date || 'Unknown Date'}
+                                                    {formatClaimDate(claim.value) || 'Unknown Date'}
                                                 </div>
                                                 <div className="flex-1 pb-4 border-l border-border-subtle pl-4 relative">
                                                     <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-border" />
@@ -339,7 +359,7 @@ export function PersonPage() {
                                                         {claim.place?.displayName}
                                                     </div>
                                                     <div className="text-xs text-muted">
-                                                        {claim.value.date || 'Unknown date'}
+                                                        {formatClaimDate(claim.value) || 'Unknown date'}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
@@ -491,9 +511,9 @@ export function PersonPage() {
                                                                     ? (claim.value.customFields as { title?: string } | undefined)?.title || 'Custom event'
                                                                     : claim.claimType.replace('_', ' ')}
                                                             </div>
-                                                            <div className="text-xs text-muted">
-                                                                {claim.value.date || 'Unknown date'}
-                                                            </div>
+                                                                <div className="text-xs text-muted">
+                                                                    {formatClaimDate(claim.value) || 'Unknown date'}
+                                                                </div>
                                                         </div>
                                                         <button
                                                             className="btn btn-ghost btn-sm"
@@ -517,6 +537,14 @@ export function PersonPage() {
 
                 {activeTab === 'sources' && (
                     <PersonSourceList
+                        treeId={treeId as Id<"trees">}
+                        personId={personId as Id<"people">}
+                        claims={person.claims as PersonClaim[]}
+                    />
+                )}
+
+                {activeTab === 'media' && (
+                    <MediaList
                         treeId={treeId as Id<"trees">}
                         personId={personId as Id<"people">}
                         claims={person.claims as PersonClaim[]}

@@ -95,6 +95,7 @@ export function PersonSourceList({
                 <CreateSourceModal
                     treeId={treeId}
                     claims={claims}
+                    personId={personId}
                     onClose={() => setShowCreate(false)}
                 />
             )}

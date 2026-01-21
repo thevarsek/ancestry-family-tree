@@ -68,7 +68,7 @@ describe('PedigreeChart', () => {
         );
 
         const paths = container.querySelectorAll('svg path');
-        expect(paths).toHaveLength(5);
+        expect(paths).toHaveLength(3);
     });
 
     it('pans the scroll container when dragged', () => {

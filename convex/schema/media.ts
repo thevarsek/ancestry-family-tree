@@ -4,6 +4,7 @@ import { v } from "convex/values";
 export const mediaTables = {
     media: defineTable({
         treeId: v.id("trees"),
+        ownerPersonId: v.id("people"),
         storageKind: v.union(
             v.literal("external_link"),
             v.literal("convex_file"),
@@ -25,16 +26,17 @@ export const mediaTables = {
             v.literal("audio"),
             v.literal("video")
         ),
-        title: v.optional(v.string()),
+        title: v.string(),
         description: v.optional(v.string()),
+        role: v.optional(v.union(
+            v.literal("profile_photo"),
+            v.literal("attachment")
+        )),
         mimeType: v.optional(v.string()),
         fileSizeBytes: v.optional(v.number()),
         durationMs: v.optional(v.number()),
         width: v.optional(v.number()),
         height: v.optional(v.number()),
-        taggedPersonIds: v.optional(v.array(v.id("people"))),
-        eventId: v.optional(v.id("events")),
-        sourceId: v.optional(v.id("sources")),
         sourceUrl: v.optional(v.string()),
         ocrStatus: v.optional(v.union(
             v.literal("pending"),
@@ -49,4 +51,32 @@ export const mediaTables = {
     }).index("by_tree", ["treeId"])
         .index("by_tree_type", ["treeId", "type"])
         .index("by_storage", ["storageId"])
+        .index("by_owner_person", ["ownerPersonId"]),
+
+    mediaPeople: defineTable({
+        treeId: v.id("trees"),
+        mediaId: v.id("media"),
+        personId: v.id("people"),
+        createdBy: v.id("users"),
+        createdAt: v.number()
+    }).index("by_media", ["mediaId"])
+        .index("by_person", ["personId"])
+        .index("by_media_person", ["mediaId", "personId"])
+        .index("by_tree", ["treeId"]),
+
+    mediaLinks: defineTable({
+        treeId: v.id("trees"),
+        mediaId: v.id("media"),
+        entityType: v.union(
+            v.literal("claim"),
+            v.literal("source"),
+            v.literal("place")
+        ),
+        entityId: v.string(),
+        createdBy: v.id("users"),
+        createdAt: v.number()
+    }).index("by_media", ["mediaId"])
+        .index("by_entity", ["entityType", "entityId"])
+        .index("by_media_entity", ["mediaId", "entityType", "entityId"])
+        .index("by_tree", ["treeId"])
 };
