@@ -1,0 +1,28 @@
+{
+    "name": "Ancestry Tracker",
+    "short_name": "Ancestry",
+    "description": "Build evidence-based family trees with sources and citations",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#fafaf9",
+    "theme_color": "#854d0e",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}
