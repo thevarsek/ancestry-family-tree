@@ -9,7 +9,7 @@ interface PedigreeChartProps {
     rootPersonId: Id<"people">;
 }
 
-type LinkType = 'parent' | 'spouse' | 'sibling';
+type LinkType = 'parent' | 'spouse';
 
 interface ChartNode {
     id: Id<"people">;
@@ -51,7 +51,6 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
         const parentsByChild = new Map<Id<"people">, Id<"people">[]>();
         const childrenByParent = new Map<Id<"people">, Id<"people">[]>();
         const spousesByPerson = new Map<Id<"people">, Id<"people">[]>();
-        const siblingsByPerson = new Map<Id<"people">, Id<"people">[]>();
 
         relationships.forEach((relationship) => {
             if (relationship.type === 'parent_child') {
@@ -74,15 +73,6 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 spousesByPerson.set(relationship.personId2, right);
             }
 
-            if (relationship.type === 'sibling') {
-                const left = siblingsByPerson.get(relationship.personId1) ?? [];
-                left.push(relationship.personId2);
-                siblingsByPerson.set(relationship.personId1, left);
-
-                const right = siblingsByPerson.get(relationship.personId2) ?? [];
-                right.push(relationship.personId1);
-                siblingsByPerson.set(relationship.personId2, right);
-            }
         });
 
         const generationById = new Map<Id<"people">, number>();
@@ -118,13 +108,6 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 }
             });
 
-            const siblings = siblingsByPerson.get(currentId) ?? [];
-            siblings.forEach((siblingId) => {
-                if (!generationById.has(siblingId)) {
-                    generationById.set(siblingId, generation);
-                    queue.push(siblingId);
-                }
-            });
         }
 
         const nodesByGeneration = new Map<number, ChartNode[]>();
@@ -179,79 +162,76 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 .filter((order): order is number => order !== undefined);
         };
 
+        const buildSpouseClusters = (generation: number): ChartNode[][] => {
+            const group = nodesByGeneration.get(generation) ?? [];
+            if (group.length < 2) return group.map((node) => [node]);
+            const byId = new Map(group.map((node) => [node.id, node]));
+            const visited = new Set<Id<"people">>();
+            const clusters: ChartNode[][] = [];
+
+            group.forEach((node) => {
+                if (visited.has(node.id)) return;
+                const stack = [node.id];
+                const cluster: ChartNode[] = [];
+
+                while (stack.length) {
+                    const currentId = stack.pop();
+                    if (!currentId || visited.has(currentId)) continue;
+                    visited.add(currentId);
+                    const currentNode = byId.get(currentId);
+                    if (currentNode) cluster.push(currentNode);
+
+                    const spouses = spousesByPerson.get(currentId) ?? [];
+                    spouses.forEach((spouseId) => {
+                        if (generationById.get(spouseId) === generation && byId.has(spouseId)) {
+                            stack.push(spouseId);
+                        }
+                    });
+                }
+
+                clusters.push(cluster);
+            });
+
+            return clusters;
+        };
+
         const sortGeneration = (generation: number, neighborGeneration: number) => {
             const group = nodesByGeneration.get(generation);
             if (!group || group.length < 2) return;
             const originalOrder = new Map(group.map((node, index) => [node.id, index]));
-            const sorted = [...group].sort((a, b) => {
-                const aOrders = getNeighborOrders(a.id, neighborGeneration);
-                const bOrders = getNeighborOrders(b.id, neighborGeneration);
-                const aAvg = aOrders.length ? aOrders.reduce((sum, val) => sum + val, 0) / aOrders.length : null;
-                const bAvg = bOrders.length ? bOrders.reduce((sum, val) => sum + val, 0) / bOrders.length : null;
 
-                if (aAvg === null && bAvg === null) {
-                    return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0);
-                }
+            const clusterOrderValue = (cluster: ChartNode[]) => {
+                const orders = cluster.flatMap((node) => getNeighborOrders(node.id, neighborGeneration));
+                if (!orders.length) return null;
+                return orders.reduce((sum, val) => sum + val, 0) / orders.length;
+            };
+
+            const sortWithinCluster = (cluster: ChartNode[]) =>
+                [...cluster].sort((a, b) => (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0));
+
+            const clusters = buildSpouseClusters(generation).map((cluster) => sortWithinCluster(cluster));
+            const sortedClusters = [...clusters].sort((a, b) => {
+                const aAvg = clusterOrderValue(a);
+                const bAvg = clusterOrderValue(b);
+                const aOriginal = Math.min(...a.map((node) => originalOrder.get(node.id) ?? 0));
+                const bOriginal = Math.min(...b.map((node) => originalOrder.get(node.id) ?? 0));
+
+                if (aAvg === null && bAvg === null) return aOriginal - bOriginal;
                 if (aAvg === null) return 1;
                 if (bAvg === null) return -1;
-                if (aAvg === bAvg) {
-                    return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0);
-                }
+                if (aAvg === bAvg) return aOriginal - bOriginal;
                 return aAvg - bAvg;
             });
+
+            const sorted = sortedClusters.flatMap((cluster) => cluster);
             nodesByGeneration.set(generation, sorted);
             sorted.forEach((node, index) => {
                 orderById.set(node.id, index);
             });
         };
 
-        const clusterGeneration = (generation: number) => {
-            const group = nodesByGeneration.get(generation);
-            if (!group || group.length < 2) return;
-            const ordered = [...group].sort(
-                (a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0)
-            );
-            const visited = new Set<Id<"people">>();
-            const clustered: ChartNode[] = [];
-
-            ordered.forEach((node) => {
-                if (visited.has(node.id)) return;
-                const clusterIds = new Set<Id<"people">>();
-                clusterIds.add(node.id);
-
-                const spouses = spousesByPerson.get(node.id) ?? [];
-                spouses.forEach((spouseId) => {
-                    if (generationById.get(spouseId) === generation) {
-                        clusterIds.add(spouseId);
-                    }
-                });
-
-                const siblings = siblingsByPerson.get(node.id) ?? [];
-                siblings.forEach((siblingId) => {
-                    if (generationById.get(siblingId) === generation) {
-                        clusterIds.add(siblingId);
-                    }
-                });
-
-                const cluster = ordered.filter((candidate) => clusterIds.has(candidate.id));
-                cluster.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
-                cluster.forEach((member) => {
-                    visited.add(member.id);
-                    clustered.push(member);
-                });
-            });
-
-            nodesByGeneration.set(generation, clustered);
-            clustered.forEach((node, index) => {
-                orderById.set(node.id, index);
-            });
-        };
-
-        // Run more iterations for better convergence to minimize crossings
-        // Interleave clustering to ensure spouses stay together during optimization
-        // Run iterations to minimize crossings
-        // We run clustering only at the end to ensure families stay together
-        for (let i = 0; i < 4; i += 1) {
+        // Run extra sweeps to improve crossing minimization while keeping spouses together
+        for (let i = 0; i < 6; i += 1) {
             generationKeys.forEach((generation) => {
                 sortGeneration(generation, generation - 1);
             });
@@ -259,12 +239,6 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 sortGeneration(generation, generation + 1);
             });
         }
-
-
-
-        generationKeys.forEach((generation) => {
-            clusterGeneration(generation);
-        });
 
         const nodes: ChartNode[] = [];
         generationKeys.forEach((generation) => {
@@ -288,8 +262,6 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 links.push({ from, to, type: 'parent' });
             } else if (relationship.type === 'spouse' || relationship.type === 'partner') {
                 links.push({ from, to, type: 'spouse' });
-            } else if (relationship.type === 'sibling') {
-                links.push({ from, to, type: 'sibling' });
             }
         });
 
@@ -483,26 +455,24 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                         </marker>
                     </defs>
 
-                    {/* Draw Links - Other Types (Spouse/Sibling) */}
-                    {chartData.links.filter(l => l.type !== 'parent').map((link, i) => {
+                    {/* Draw Links - Spouse/Partner */}
+                    {chartData.links.filter(l => l.type === 'spouse').map((link, i) => {
                         const fromX = link.from.x + NODE_WIDTH / 2;
                         const fromY = link.from.y + NODE_HEIGHT / 2;
                         const toX = link.to.x + NODE_WIDTH / 2;
                         const toY = link.to.y + NODE_HEIGHT / 2;
 
-                        // Vertical-ish curve for same-generation relationships (spouse/sibling)
+                        // Gentle curve for same-generation relationships (spouse/partner)
                         const midY = (fromY + toY) / 2;
-                        // Larger curve offset to go around nodes instead of through them
-                        const curveOffset = link.type === 'spouse' ? 160 : -160;
+                        const curveOffset = 90;
                         const path = `M ${fromX} ${fromY} C ${fromX + curveOffset} ${midY}, ${toX + curveOffset} ${midY}, ${toX} ${toY}`;
 
                         return (
                             <path
                                 key={`other-link-${i}`}
                                 d={path}
-                                stroke={link.type === 'spouse' ? "var(--color-accent)" : "var(--color-text-muted)"}
+                                stroke="var(--color-accent)"
                                 strokeWidth={2}
-                                strokeDasharray={link.type === 'sibling' ? "4 2" : "0"}
                                 fill="none"
                                 opacity={0.8}
                             />
