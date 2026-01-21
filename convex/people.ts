@@ -435,7 +435,7 @@ export const getRelationships = query({
                     ),
                 })),
             siblings: [...asFirst, ...asSecond]
-                .filter((r) => r.type === "sibling")
+                .filter((r) => r.type === "sibling" || r.type === "half_sibling")
                 .map((r) => ({
                     relationship: r,
                     person: peopleMap.get(

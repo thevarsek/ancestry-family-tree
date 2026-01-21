@@ -36,6 +36,7 @@ export const peopleTables = {
             v.literal("parent_child"),
             v.literal("spouse"),
             v.literal("sibling"),
+            v.literal("half_sibling"),
             v.literal("partner")
         ),
         personId1: v.id("people"),

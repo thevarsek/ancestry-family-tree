@@ -4,7 +4,7 @@ import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { CreatePersonModal } from './PersonList';
 
-type RelationshipType = "parent_child" | "spouse" | "sibling" | "partner";
+type RelationshipType = "parent_child" | "spouse" | "sibling" | "half_sibling" | "partner";
 type RelationshipRole = 'parent' | 'child';
 
 export function AddRelationshipModal({
@@ -24,6 +24,7 @@ export function AddRelationshipModal({
     const [relType, setRelType] = useState<RelationshipType | null>(null);
     const [role, setRole] = useState<RelationshipRole>('parent');
     const [selectedPersonIds, setSelectedPersonIds] = useState<Id<"people">[]>([]);
+    const [relStatus, setRelStatus] = useState<'current' | 'divorced' | 'separated' | 'widowed' | 'ended'>('current');
     const [showCreatePerson, setShowCreatePerson] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -91,7 +92,7 @@ export function AddRelationshipModal({
                     personId1: p1,
                     personId2: p2,
                     type: relType,
-                    status: relType === 'spouse' || relType === 'partner' ? 'current' : undefined,
+                    status: (relType === 'spouse' || relType === 'partner') ? relStatus : undefined,
                 });
             }));
 
@@ -182,6 +183,18 @@ export function AddRelationshipModal({
                                         <span className="text-xs text-accent mt-2 inline-block">Selected</span>
                                     )}
                                 </button>
+                                <button
+                                    type="button"
+                                    className={`card p-4 text-left hover:border-accent ${relType === 'half_sibling' ? 'border-accent ring-1 ring-accent bg-primary/5' : ''}`}
+                                    onClick={() => handleTypeSelect('half_sibling')}
+                                >
+                                    <span className="text-2xl block mb-2">🤝</span>
+                                    <div className="font-medium">Half Sibling</div>
+                                    <div className="text-xs text-muted">They share one parent with {personName}.</div>
+                                    {relType === 'half_sibling' && (
+                                        <span className="text-xs text-accent mt-2 inline-block">Selected</span>
+                                    )}
+                                </button>
                             </div>
                         </div>
                     ) : (
@@ -201,11 +214,36 @@ export function AddRelationshipModal({
                                     </p>
                                 </div>
                                 <div className="rounded-md border border-border-subtle bg-surface-muted p-3 text-sm">
-                                    <div className="text-muted">Relationship</div>
-                                    <div className="font-medium capitalize">
-                                        {relationshipLabel}
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="text-muted">Relationship</div>
+                                            <div className="font-medium capitalize">
+                                                {relationshipLabel}
+                                            </div>
+                                        </div>
+                                        {(relType === 'spouse' || relType === 'partner') && (
+                                            <div className="text-right">
+                                                <div className="text-muted mb-1">Status</div>
+                                                <div className="flex gap-1">
+                                                    <button
+                                                        type="button"
+                                                        className={`btn btn-xs ${relStatus === 'current' ? 'btn-primary' : 'btn-ghost'}`}
+                                                        onClick={() => setRelStatus('current')}
+                                                    >
+                                                        Current
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`btn btn-xs ${relStatus !== 'current' ? 'btn-primary' : 'btn-ghost'}`}
+                                                        onClick={() => setRelStatus(relType === 'spouse' ? 'divorced' : 'ended')}
+                                                    >
+                                                        {relType === 'spouse' ? 'Divorced' : 'Split'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="text-xs text-muted mt-1">
+                                    <div className="text-xs text-muted mt-2">
                                         You are linking people to {personName}. Select one or more existing people or create a new one.
                                     </div>
                                 </div>
@@ -222,29 +260,30 @@ export function AddRelationshipModal({
                                 {filteredPeople?.map(person => {
                                     const isSelected = selectedPersonIds.includes(person._id);
                                     return (
-                                    <div
-                                        key={person._id}
-                                        className={`p-3 rounded cursor-pointer flex items-center gap-3 border ${isSelected ? 'bg-primary/10 border-primary' : 'border-transparent hover:bg-surface-hover'}`}
-                                        onClick={() => {
-                                            setSelectedPersonIds((prev) => (
-                                                prev.includes(person._id)
-                                                    ? prev.filter((id) => id !== person._id)
-                                                    : [...prev, person._id]
-                                            ));
-                                        }}
-                                    >
-                                        <div className="avatar avatar-sm">
-                                            <span>{(person.givenNames?.[0] || '')}</span>
+                                        <div
+                                            key={person._id}
+                                            className={`p-3 rounded cursor-pointer flex items-center gap-3 border ${isSelected ? 'bg-primary/10 border-primary' : 'border-transparent hover:bg-surface-hover'}`}
+                                            onClick={() => {
+                                                setSelectedPersonIds((prev) => (
+                                                    prev.includes(person._id)
+                                                        ? prev.filter((id) => id !== person._id)
+                                                        : [...prev, person._id]
+                                                ));
+                                            }}
+                                        >
+                                            <div className="avatar avatar-sm">
+                                                <span>{(person.givenNames?.[0] || '')}</span>
+                                            </div>
+                                            <div>
+                                                <div className="font-medium">{person.givenNames} {person.surnames}</div>
+                                                <div className="text-xs text-muted">{person.isLiving ? 'Living' : 'Deceased'}</div>
+                                            </div>
+                                            {isSelected && (
+                                                <div className="ml-auto text-xs text-accent">Selected</div>
+                                            )}
                                         </div>
-                                        <div>
-                                            <div className="font-medium">{person.givenNames} {person.surnames}</div>
-                                            <div className="text-xs text-muted">{person.isLiving ? 'Living' : 'Deceased'}</div>
-                                        </div>
-                                        {isSelected && (
-                                            <div className="ml-auto text-xs text-accent">Selected</div>
-                                        )}
-                                    </div>
-                                );})}
+                                    );
+                                })}
                                 {filteredPeople?.length === 0 && (
                                     <p className="text-center text-muted py-4">No matching people found.</p>
                                 )}

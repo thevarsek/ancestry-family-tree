@@ -14,6 +14,7 @@ export const create = mutation({
             v.literal("parent_child"),
             v.literal("spouse"),
             v.literal("sibling"),
+            v.literal("half_sibling"),
             v.literal("partner")
         ),
         startDate: v.optional(v.string()),
