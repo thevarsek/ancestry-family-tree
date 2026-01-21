@@ -90,7 +90,7 @@ export function AddRelationshipModal({
                 personId1: p1,
                 personId2: p2,
                 type: relType,
-                status: relType === 'spouse' ? 'current' : undefined,
+                status: relType === 'spouse' || relType === 'partner' ? 'current' : undefined,
             });
 
             if (onSuccess) onSuccess();

@@ -271,6 +271,13 @@ export function PersonPage() {
                             </button>
                         </div>
 
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                            <span>Relationship status:</span>
+                            <span className="badge badge-relationship badge-relationship-current">Current</span>
+                            <span className="badge badge-relationship badge-relationship-ended">Ended</span>
+                            <span>Shown for spouse/partner links.</span>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             {['Parents', 'Spouses', 'Siblings', 'Children'].map((category) => {
                                 const list = category === 'Parents' ? relationships.parents

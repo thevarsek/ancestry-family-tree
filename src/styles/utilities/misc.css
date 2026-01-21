@@ -27,6 +27,18 @@
     width: 6rem !important;
 }
 
+.w-8 {
+    width: 2rem !important;
+}
+
+.h-8 {
+    height: 2rem !important;
+}
+
+.h-0\.5 {
+    height: 0.125rem !important;
+}
+
 .opacity-0 {
     opacity: 0 !important;
 }
@@ -49,6 +61,10 @@
 
 .bg-border-subtle {
     background-color: var(--color-border-subtle) !important;
+}
+
+.bg-accent-subtle {
+    background-color: var(--color-accent-subtle) !important;
 }
 
 .border-l {
