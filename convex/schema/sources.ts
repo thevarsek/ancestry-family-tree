@@ -21,6 +21,17 @@ export const sourceTables = {
             filterFields: ["treeId"]
         }),
 
+    sourceClaims: defineTable({
+        treeId: v.id("trees"),
+        sourceId: v.id("sources"),
+        claimId: v.id("claims"),
+        createdBy: v.id("users"),
+        createdAt: v.number(),
+    }).index("by_source", ["sourceId"])
+        .index("by_claim", ["claimId"])
+        .index("by_claim_source", ["claimId", "sourceId"])
+        .index("by_tree", ["treeId"]),
+
     sourceSnapshots: defineTable({
         sourceId: v.id("sources"),
         treeId: v.id("trees"),

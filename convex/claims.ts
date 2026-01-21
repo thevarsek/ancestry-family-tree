@@ -89,6 +89,15 @@ export const get = query({
             claimCitations.map((cc) => ctx.db.get(cc.citationId))
         );
 
+        const sourceLinks = await ctx.db
+            .query("sourceClaims")
+            .withIndex("by_claim", (q) => q.eq("claimId", args.claimId))
+            .collect();
+
+        const sources = await Promise.all(
+            sourceLinks.map((link) => ctx.db.get(link.sourceId))
+        );
+
         // Get place if exists
         const place = claim.value.placeId
             ? await ctx.db.get(claim.value.placeId)
@@ -98,6 +107,7 @@ export const get = query({
             ...claim,
             place,
             citations: citations.filter(Boolean),
+            sources: sources.filter(Boolean),
         };
     },
 });
@@ -127,6 +137,7 @@ export const create = mutation({
                 v.literal("uncertain")
             )
         ),
+        relatedPersonIds: v.optional(v.array(v.id("people"))),
     },
     handler: async (ctx, args) => {
         const { userId } = await requireTreeAdmin(ctx, args.treeId);
@@ -137,7 +148,13 @@ export const create = mutation({
             subjectType: args.subjectType,
             subjectId: args.subjectId,
             claimType: args.claimType,
-            value: args.value,
+            value: {
+                ...args.value,
+                customFields: {
+                    ...(args.value.customFields as Record<string, unknown> | undefined),
+                    relatedPersonIds: args.relatedPersonIds,
+                },
+            },
             status: args.status ?? "draft",
             confidence: args.confidence,
             createdBy: userId,
@@ -167,6 +184,52 @@ export const create = mutation({
                     : undefined,
             updatedAt: now,
         });
+
+        if (args.subjectType === "person" && args.relatedPersonIds?.length) {
+            const uniqueRelatedIds = Array.from(new Set(args.relatedPersonIds))
+                .filter((id) => id !== args.subjectId);
+
+            await Promise.all(
+                uniqueRelatedIds.map(async (relatedId) => {
+                    const relatedClaimId = await ctx.db.insert("claims", {
+                        treeId: args.treeId,
+                        subjectType: "person",
+                        subjectId: relatedId,
+                        claimType: args.claimType,
+                        value: {
+                            ...args.value,
+                            customFields: {
+                                ...(args.value.customFields as Record<string, unknown> | undefined),
+                                relatedPersonIds: uniqueRelatedIds,
+                            },
+                        },
+                        status: args.status ?? "draft",
+                        confidence: args.confidence,
+                        createdBy: userId,
+                        createdAt: now,
+                        updatedAt: now,
+                    });
+
+                    const relatedText = [args.claimType, args.value.description, args.value.date]
+                        .filter(Boolean)
+                        .join(" ");
+
+                    await ctx.db.insert("searchableContent", {
+                        treeId: args.treeId,
+                        entityType: "claim",
+                        entityId: relatedClaimId,
+                        content: relatedText,
+                        claimType: args.claimType,
+                        placeId: args.value.placeId,
+                        dateRange:
+                            args.value.date || args.value.dateEnd
+                                ? { start: args.value.date, end: args.value.dateEnd }
+                                : undefined,
+                        updatedAt: now,
+                    });
+                })
+            );
+        }
 
         await ctx.db.insert("auditLog", {
             treeId: args.treeId,
@@ -491,5 +554,96 @@ export const addCitation = mutation({
         });
 
         return linkId;
+    },
+});
+
+/**
+ * Link a source to a claim
+ */
+export const addSource = mutation({
+    args: {
+        claimId: v.id("claims"),
+        sourceId: v.id("sources"),
+    },
+    handler: async (ctx, args) => {
+        const claim = await ctx.db.get(args.claimId);
+        if (!claim) throw new Error("Claim not found");
+
+        const source = await ctx.db.get(args.sourceId);
+        if (!source) throw new Error("Source not found");
+
+        if (source.treeId !== claim.treeId) {
+            throw new Error("Source belongs to a different tree");
+        }
+
+        const { userId } = await requireTreeAdmin(ctx, claim.treeId);
+        const now = Date.now();
+
+        const existingLink = await ctx.db
+            .query("sourceClaims")
+            .withIndex("by_claim_source", (q) =>
+                q.eq("claimId", args.claimId).eq("sourceId", args.sourceId)
+            )
+            .unique();
+
+        if (existingLink) return existingLink._id;
+
+        const linkId = await ctx.db.insert("sourceClaims", {
+            treeId: claim.treeId,
+            claimId: args.claimId,
+            sourceId: args.sourceId,
+            createdBy: userId,
+            createdAt: now,
+        });
+
+        await ctx.db.insert("auditLog", {
+            treeId: claim.treeId,
+            userId,
+            action: "source_linked",
+            entityType: "sourceClaim",
+            entityId: linkId,
+            timestamp: now,
+        });
+
+        return linkId;
+    },
+});
+
+/**
+ * Unlink a source from a claim
+ */
+export const removeSource = mutation({
+    args: {
+        claimId: v.id("claims"),
+        sourceId: v.id("sources"),
+    },
+    handler: async (ctx, args) => {
+        const claim = await ctx.db.get(args.claimId);
+        if (!claim) throw new Error("Claim not found");
+
+        const { userId } = await requireTreeAdmin(ctx, claim.treeId);
+        const now = Date.now();
+
+        const link = await ctx.db
+            .query("sourceClaims")
+            .withIndex("by_claim_source", (q) =>
+                q.eq("claimId", args.claimId).eq("sourceId", args.sourceId)
+            )
+            .unique();
+
+        if (!link) return null;
+
+        await ctx.db.delete(link._id);
+
+        await ctx.db.insert("auditLog", {
+            treeId: claim.treeId,
+            userId,
+            action: "source_unlinked",
+            entityType: "sourceClaim",
+            entityId: link._id,
+            timestamp: now,
+        });
+
+        return link._id;
     },
 });

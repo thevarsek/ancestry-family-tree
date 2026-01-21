@@ -65,7 +65,7 @@ describe('AddRelationshipModal', () => {
             />
         );
 
-        await user.click(screen.getByRole('button', { name: /parent/i }));
+        await user.click(screen.getAllByRole('button', { name: /parent/i })[0]);
         await user.click(screen.getByRole('button', { name: /next: select person/i }));
 
         await user.click(screen.getByText('Jane Doe'));

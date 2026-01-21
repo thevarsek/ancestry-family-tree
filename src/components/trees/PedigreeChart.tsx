@@ -23,6 +23,7 @@ interface ChartLink {
     from: ChartNode;
     to: ChartNode;
     type: LinkType;
+    isHighlighted: boolean;
 }
 
 export function PedigreeChart({ treeId, people, relationships, rootPersonId }: PedigreeChartProps) {
@@ -37,7 +38,8 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
         scrollTop: 0,
         moved: false,
         lastPanAt: 0,
-        targetPersonId: null as Id<"people"> | null
+        isPointerDown: false,
+        isPanning: false
     });
 
     // Layout constants
@@ -45,12 +47,14 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
     const NODE_HEIGHT = 80;
     const HORIZONTAL_GAP = 100;
     const VERTICAL_GAP = 40;
+    const GROUP_GAP = 40;
 
     const chartData = useMemo(() => {
         const peopleById = new Map(people.map(person => [person._id, person]));
         const parentsByChild = new Map<Id<"people">, Id<"people">[]>();
         const childrenByParent = new Map<Id<"people">, Id<"people">[]>();
         const spousesByPerson = new Map<Id<"people">, Id<"people">[]>();
+        const siblingsByPerson = new Map<Id<"people">, Id<"people">[]>();
 
         relationships.forEach((relationship) => {
             if (relationship.type === 'parent_child') {
@@ -73,6 +77,30 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 spousesByPerson.set(relationship.personId2, right);
             }
 
+            if (relationship.type === 'sibling') {
+                const left = siblingsByPerson.get(relationship.personId1) ?? [];
+                left.push(relationship.personId2);
+                siblingsByPerson.set(relationship.personId1, left);
+
+                const right = siblingsByPerson.get(relationship.personId2) ?? [];
+                right.push(relationship.personId1);
+                siblingsByPerson.set(relationship.personId2, right);
+            }
+
+        });
+
+        childrenByParent.forEach((children) => {
+            children.forEach((childId) => {
+                const siblings = siblingsByPerson.get(childId) ?? [];
+                children.forEach((siblingId) => {
+                    if (siblingId !== childId && !siblings.includes(siblingId)) {
+                        siblings.push(siblingId);
+                    }
+                });
+                if (siblings.length) {
+                    siblingsByPerson.set(childId, siblings);
+                }
+            });
         });
 
         const generationById = new Map<Id<"people">, number>();
@@ -108,9 +136,18 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 }
             });
 
+            const siblings = siblingsByPerson.get(currentId) ?? [];
+            siblings.forEach((siblingId) => {
+                if (!generationById.has(siblingId)) {
+                    generationById.set(siblingId, generation);
+                    queue.push(siblingId);
+                }
+            });
+
         }
 
         const nodesByGeneration = new Map<number, ChartNode[]>();
+        const groupIndexById = new Map<Id<"people">, number>();
         generationById.forEach((generation, personId) => {
             const person = peopleById.get(personId);
             if (!person) return;
@@ -162,7 +199,7 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 .filter((order): order is number => order !== undefined);
         };
 
-        const buildSpouseClusters = (generation: number): ChartNode[][] => {
+        const buildSiblingClusters = (generation: number): ChartNode[][] => {
             const group = nodesByGeneration.get(generation) ?? [];
             if (group.length < 2) return group.map((node) => [node]);
             const byId = new Map(group.map((node) => [node.id, node]));
@@ -181,10 +218,10 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                     const currentNode = byId.get(currentId);
                     if (currentNode) cluster.push(currentNode);
 
-                    const spouses = spousesByPerson.get(currentId) ?? [];
-                    spouses.forEach((spouseId) => {
-                        if (generationById.get(spouseId) === generation && byId.has(spouseId)) {
-                            stack.push(spouseId);
+                    const siblings = siblingsByPerson.get(currentId) ?? [];
+                    siblings.forEach((siblingId) => {
+                        if (generationById.get(siblingId) === generation && byId.has(siblingId)) {
+                            stack.push(siblingId);
                         }
                     });
                 }
@@ -195,6 +232,16 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
             return clusters;
         };
 
+        const medianOrder = (orders: number[]) => {
+            if (!orders.length) return null;
+            const sorted = [...orders].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            if (sorted.length % 2 === 0) {
+                return (sorted[mid - 1] + sorted[mid]) / 2;
+            }
+            return sorted[mid];
+        };
+
         const sortGeneration = (generation: number, neighborGeneration: number) => {
             const group = nodesByGeneration.get(generation);
             if (!group || group.length < 2) return;
@@ -202,14 +249,13 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
 
             const clusterOrderValue = (cluster: ChartNode[]) => {
                 const orders = cluster.flatMap((node) => getNeighborOrders(node.id, neighborGeneration));
-                if (!orders.length) return null;
-                return orders.reduce((sum, val) => sum + val, 0) / orders.length;
+                return medianOrder(orders);
             };
 
             const sortWithinCluster = (cluster: ChartNode[]) =>
                 [...cluster].sort((a, b) => (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0));
 
-            const clusters = buildSpouseClusters(generation).map((cluster) => sortWithinCluster(cluster));
+            const clusters = buildSiblingClusters(generation).map((cluster) => sortWithinCluster(cluster));
             const sortedClusters = [...clusters].sort((a, b) => {
                 const aAvg = clusterOrderValue(a);
                 const bAvg = clusterOrderValue(b);
@@ -223,7 +269,44 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 return aAvg - bAvg;
             });
 
-            const sorted = sortedClusters.flatMap((cluster) => cluster);
+            const placedIds = new Set<Id<"people">>();
+            const sorted: ChartNode[] = [];
+            let groupIndex = 0;
+
+            sortedClusters.forEach((cluster) => {
+                cluster.forEach((node) => {
+                    if (!placedIds.has(node.id)) {
+                        placedIds.add(node.id);
+                        groupIndexById.set(node.id, groupIndex);
+                        sorted.push(node);
+                    }
+                });
+
+                const spouseSet = new Set<Id<"people">>();
+                cluster.forEach((node) => {
+                    const spouses = spousesByPerson.get(node.id) ?? [];
+                    spouses.forEach((spouseId) => {
+                        if (generationById.get(spouseId) === generation && !placedIds.has(spouseId)) {
+                            spouseSet.add(spouseId);
+                        }
+                    });
+                });
+
+                const spouses = [...spouseSet]
+                    .map((spouseId) => nodesByGeneration.get(generation)?.find((node) => node.id === spouseId))
+                    .filter((node): node is ChartNode => Boolean(node))
+                    .sort((a, b) => (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0));
+
+                spouses.forEach((node) => {
+                    if (!placedIds.has(node.id)) {
+                        placedIds.add(node.id);
+                        groupIndexById.set(node.id, groupIndex);
+                        sorted.push(node);
+                    }
+                });
+
+                groupIndex += 1;
+            });
             nodesByGeneration.set(generation, sorted);
             sorted.forEach((node, index) => {
                 orderById.set(node.id, index);
@@ -231,7 +314,7 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
         };
 
         // Run extra sweeps to improve crossing minimization while keeping spouses together
-        for (let i = 0; i < 6; i += 1) {
+        for (let i = 0; i < 8; i += 1) {
             generationKeys.forEach((generation) => {
                 sortGeneration(generation, generation - 1);
             });
@@ -243,9 +326,24 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
         const nodes: ChartNode[] = [];
         generationKeys.forEach((generation) => {
             const group = nodesByGeneration.get(generation) ?? [];
-            const groupHeight = (group.length - 1) * (NODE_HEIGHT + VERTICAL_GAP);
-            group.forEach((node, index) => {
-                node.y = index * (NODE_HEIGHT + VERTICAL_GAP) - groupHeight / 2;
+            let cursorY = 0;
+            let previousGroupIndex: number | null = null;
+
+            const positioned = group.map((node, index) => {
+                const currentGroupIndex = groupIndexById.get(node.id) ?? 0;
+                if (index > 0) {
+                    cursorY += NODE_HEIGHT + VERTICAL_GAP;
+                    if (previousGroupIndex !== null && currentGroupIndex !== previousGroupIndex) {
+                        cursorY += GROUP_GAP;
+                    }
+                }
+                previousGroupIndex = currentGroupIndex;
+                return { node, y: cursorY };
+            });
+
+            const totalHeight = positioned.length ? cursorY + NODE_HEIGHT : 0;
+            positioned.forEach(({ node, y }) => {
+                node.y = y - totalHeight / 2;
                 nodes.push(node);
             });
         });
@@ -257,11 +355,14 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
             const from = nodeById.get(relationship.personId1);
             const to = nodeById.get(relationship.personId2);
             if (!from || !to) return;
+            const isHighlighted =
+                (relationship.type === 'parent_child' || relationship.type === 'spouse' || relationship.type === 'partner') &&
+                (relationship.personId1 === rootPersonId || relationship.personId2 === rootPersonId);
 
             if (relationship.type === 'parent_child') {
-                links.push({ from, to, type: 'parent' });
+                links.push({ from, to, type: 'parent', isHighlighted });
             } else if (relationship.type === 'spouse' || relationship.type === 'partner') {
-                links.push({ from, to, type: 'spouse' });
+                links.push({ from, to, type: 'spouse', isHighlighted });
             }
         });
 
@@ -310,21 +411,8 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
     }
 
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        // Find if we clicked a node
-        let target = event.target as HTMLElement;
-        let personId: string | null = null;
-        while (target && target !== container) {
-            if (target.getAttribute('data-person-id')) {
-                personId = target.getAttribute('data-person-id');
-                break;
-            }
-            target = target.parentElement as HTMLElement;
-        }
-
-        container.setPointerCapture(event.pointerId);
+        if (event.button !== 0) return;
+        const container = event.currentTarget;
         panState.current = {
             startX: event.clientX,
             startY: event.clientY,
@@ -332,37 +420,41 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
             scrollTop: container.scrollTop,
             moved: false,
             lastPanAt: panState.current.lastPanAt,
-            targetPersonId: personId as Id<"people"> | null
+            isPointerDown: true,
+            isPanning: false
         };
-        setIsPanning(true);
     };
 
     const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-        const container = containerRef.current;
-        if (!container || !isPanning) return;
+        const container = event.currentTarget;
+        if (!panState.current.isPointerDown) return;
         const deltaX = event.clientX - panState.current.startX;
         const deltaY = event.clientY - panState.current.startY;
-        if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
+        const movedEnough = Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4;
+        if (!panState.current.isPanning && movedEnough) {
             panState.current.moved = true;
+            panState.current.isPanning = true;
+            setIsPanning(true);
+            container.setPointerCapture?.(event.pointerId);
         }
+        if (!panState.current.isPanning) return;
+        event.preventDefault();
         container.scrollLeft = panState.current.scrollLeft - deltaX;
         container.scrollTop = panState.current.scrollTop - deltaY;
     };
 
     const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-        const container = containerRef.current;
-        if (!container) return;
-        container.releasePointerCapture(event.pointerId);
-        setIsPanning(false);
-
-        if (!panState.current.moved && panState.current.targetPersonId) {
-            handleNodeClick(panState.current.targetPersonId);
+        const container = event.currentTarget;
+        if (panState.current.isPanning && container.hasPointerCapture?.(event.pointerId)) {
+            container.releasePointerCapture(event.pointerId);
         }
-
+        setIsPanning(false);
+        panState.current.isPanning = false;
+        panState.current.isPointerDown = false;
         if (panState.current.moved) {
             panState.current.lastPanAt = Date.now();
-            panState.current.moved = false;
         }
+        panState.current.moved = false;
     };
 
     const handleNodeClick = (personId: Id<"people">) => {
@@ -418,13 +510,8 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
 
     return (
         <div
-            ref={containerRef}
-            className="card p-4 overflow-auto"
-            style={{ height: '600px', cursor: isPanning ? 'grabbing' : 'grab', touchAction: 'none' }}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={() => setIsPanning(false)}
+            className="card p-4 flex flex-col"
+            style={{ height: '600px', overflow: 'hidden' }}
         >
             <div
                 className="flex items-center justify-between mb-3 text-xs text-muted"
@@ -440,8 +527,18 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                     <button className="btn btn-secondary btn-sm" onClick={handleCenter}>Center</button>
                 </div>
             </div>
-            <div style={{ width: chartData.width * scale, height: chartData.height * scale, display: 'inline-block' }}>
-                <svg width={chartData.width} height={chartData.height} style={{ transform: `scale(${scale})`, transformOrigin: 'top left', overflow: 'visible' }}>
+            <div
+                ref={containerRef}
+                className="flex-1 overflow-auto"
+                style={{ cursor: isPanning ? 'grabbing' : 'grab', touchAction: 'none', minHeight: 0, userSelect: 'none' }}
+                data-testid="pedigree-chart-scroll"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+            >
+                <div style={{ width: chartData.width * scale, height: chartData.height * scale, display: 'inline-block', overflow: 'hidden' }}>
+                    <svg width={chartData.width} height={chartData.height} style={{ transform: `scale(${scale})`, transformOrigin: 'top left', overflow: 'hidden' }}>
                     <defs>
                         <marker
                             id="arrowhead"
@@ -457,71 +554,44 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
 
                     {/* Draw Links - Spouse/Partner */}
                     {chartData.links.filter(l => l.type === 'spouse').map((link, i) => {
-                        const fromX = link.from.x + NODE_WIDTH / 2;
                         const fromY = link.from.y + NODE_HEIGHT / 2;
-                        const toX = link.to.x + NODE_WIDTH / 2;
                         const toY = link.to.y + NODE_HEIGHT / 2;
-
-                        // Gentle curve for same-generation relationships (spouse/partner)
-                        const midY = (fromY + toY) / 2;
-                        const curveOffset = 90;
-                        const path = `M ${fromX} ${fromY} C ${fromX + curveOffset} ${midY}, ${toX + curveOffset} ${midY}, ${toX} ${toY}`;
+                        const isLeftToRight = link.from.x <= link.to.x;
+                        const fromX = isLeftToRight ? link.from.x + NODE_WIDTH : link.from.x;
+                        const toX = isLeftToRight ? link.to.x : link.to.x + NODE_WIDTH;
+                        const midX = (fromX + toX) / 2;
+                        const path = `M ${fromX} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toX} ${toY}`;
 
                         return (
                             <path
                                 key={`other-link-${i}`}
                                 d={path}
-                                stroke="var(--color-accent)"
-                                strokeWidth={2}
+                                stroke={link.isHighlighted ? "var(--color-accent)" : "var(--color-border)"}
+                                strokeWidth={link.isHighlighted ? 3 : 2}
                                 fill="none"
-                                opacity={0.8}
+                                opacity={link.isHighlighted ? 0.95 : 0.7}
                             />
                         );
                     })}
 
                     {/* Draw Links - Grouped by Child to merge parent lines */}
-                    {Object.entries(
-                        chartData.links.filter(l => l.type === 'parent').reduce((acc, link) => {
-                            const childId = link.to.id;
-                            if (!acc[childId]) acc[childId] = [];
-                            acc[childId].push(link);
-                            return acc;
-                        }, {} as Record<string, ChartLink[]>)
-                    ).map(([childId, childLinks]) => {
-                        const toX = childLinks[0].to.x;
-                        const toY = childLinks[0].to.y + NODE_HEIGHT / 2;
-
-                        // Junction point where lines meet
-                        const junctionX = toX - HORIZONTAL_GAP / 2;
+                    {chartData.links.filter((link) => link.type === 'parent').map((link, i) => {
+                        const fromX = link.from.x + NODE_WIDTH;
+                        const fromY = link.from.y + NODE_HEIGHT / 2;
+                        const toX = link.to.x;
+                        const toY = link.to.y + NODE_HEIGHT / 2;
+                        const midX = (fromX + toX) / 2;
+                        const path = `M ${fromX} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toX} ${toY}`;
 
                         return (
-                            <g key={`links-to-${childId}`}>
-                                {childLinks.map((link, i) => {
-                                    const fromX = link.from.x + NODE_WIDTH;
-                                    const fromY = link.from.y + NODE_HEIGHT / 2;
-
-                                    // Line from parent to junction
-                                    // Smooth bezier curve
-                                    const path = `M ${fromX} ${fromY} C ${fromX + 40} ${fromY}, ${junctionX - 40} ${toY}, ${junctionX} ${toY}`;
-
-                                    return (
-                                        <path
-                                            key={`link-${i}`}
-                                            d={path}
-                                            stroke="var(--color-border)"
-                                            strokeWidth={2}
-                                            fill="none"
-                                        />
-                                    );
-                                })}
-                                {/* Single horizontal line from junction to child */}
-                                <path
-                                    d={`M ${junctionX} ${toY} L ${toX} ${toY}`}
-                                    stroke="var(--color-border)"
-                                    strokeWidth={2}
-                                    fill="none"
-                                />
-                            </g>
+                            <path
+                                key={`parent-link-${i}`}
+                                d={path}
+                                stroke={link.isHighlighted ? "var(--color-accent)" : "var(--color-border)"}
+                                strokeWidth={link.isHighlighted ? 3 : 2}
+                                fill="none"
+                                opacity={link.isHighlighted ? 0.95 : 0.7}
+                            />
                         );
                     })}
 
@@ -532,6 +602,10 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                             transform={`translate(${node.x}, ${node.y})`}
                             className="cursor-pointer transition-transform"
                             data-person-id={node.id}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                handleNodeClick(node.id);
+                            }}
                         >
                             <rect
                                 width={NODE_WIDTH}
@@ -563,7 +637,8 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                             </text>
                         </g>
                     ))}
-                </svg>
+                    </svg>
+                </div>
             </div>
         </div>
     );

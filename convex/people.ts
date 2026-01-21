@@ -67,11 +67,42 @@ export const getWithClaims = query({
             places.filter(Boolean).map((p) => [p!._id, p])
         );
 
+        const claimSourceLinks = await Promise.all(
+            claims.map(async (claim) => ({
+                claimId: claim._id,
+                links: await ctx.db
+                    .query("sourceClaims")
+                    .withIndex("by_claim", (q) => q.eq("claimId", claim._id))
+                    .collect(),
+            }))
+        );
+
+        const sourceIdSet = new Set<Id<"sources">>();
+        const claimSourceIds = new Map<Id<"claims">, Id<"sources">[]>();
+
+        claimSourceLinks.forEach(({ claimId, links }) => {
+            const sourceIds = links.map((link) => link.sourceId);
+            claimSourceIds.set(claimId, sourceIds);
+            sourceIds.forEach((sourceId) => sourceIdSet.add(sourceId));
+        });
+
+        const sources = await Promise.all(
+            [...sourceIdSet].map((id) => ctx.db.get(id))
+        );
+        const sourcesMap = new Map(
+            sources.filter(Boolean).map((source) => [source!._id, source])
+        );
+
         return {
             ...person,
             claims: claims.map((c) => ({
                 ...c,
                 place: c.value.placeId ? placesMap.get(c.value.placeId) : undefined,
+                sources: (claimSourceIds.get(c._id) ?? [])
+                    .map((sourceId) => sourcesMap.get(sourceId))
+                    .filter((source): source is Exclude<typeof source, null | undefined> =>
+                        Boolean(source)
+                    ),
             })),
         };
     },

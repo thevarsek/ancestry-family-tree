@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { Id } from '../../convex/_generated/dataModel';
+import type { Doc, Id } from '../../convex/_generated/dataModel';
 
 export function TreeSettings() {
     const { treeId } = useParams<{ treeId: string }>();
@@ -109,6 +109,17 @@ export function TreeSettings() {
         }
     };
 
+    const safeMembers = (members ?? []).filter(
+        (member): member is {
+            userId: Id<"users">;
+            name: string;
+            email: string;
+            avatarUrl: string | undefined;
+            role: 'admin' | 'user';
+            joinedAt: number;
+        } => Boolean(member)
+    );
+
     return (
         <div className="container py-8">
             <div className="mb-8">
@@ -168,7 +179,7 @@ export function TreeSettings() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
-                                    {(members || []).map((member: any) => member && (
+                                    {safeMembers.map((member) => (
                                         <tr key={member.userId} className="group">
                                             <td className="py-3">
                                                 <div className="flex items-center gap-3">
@@ -264,7 +275,7 @@ export function TreeSettings() {
                         <h2 className="text-lg font-bold mb-4">Pending Invitations</h2>
                         {invitations && invitations.length > 0 ? (
                             <div className="space-y-3">
-                                {invitations.map((inv: any) => (
+                                {invitations.map((inv: Doc<"invitations">) => (
                                     <div key={inv._id} className="flex justify-between items-center text-sm p-3 bg-bg-secondary rounded-lg">
                                         <div>
                                             <div className="font-medium">{inv.email}</div>

@@ -11,13 +11,17 @@ import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { defaultLeafletIcon } from '../components/places/leafletIcon';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
+import { PersonSourceList } from '../components/sources/PersonSourceList';
 
-type PersonClaim = Doc<"claims"> & { place?: Doc<"places"> | null };
+type PersonClaim = Doc<"claims"> & {
+    place?: Doc<"places"> | null;
+    sources?: Doc<"sources">[];
+};
 
 export function PersonPage() {
     const { treeId, personId } = useParams<{ treeId: string; personId: string }>();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState<'overview' | 'relationships' | 'places'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'relationships' | 'places' | 'sources'>('overview');
     const [showAddRel, setShowAddRel] = useState(false);
     const [showAddClaim, setShowAddClaim] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
@@ -201,6 +205,12 @@ export function PersonPage() {
                     onClick={() => setActiveTab('places')}
                 >
                     Places
+                </button>
+                <button
+                    className={`tab ${activeTab === 'sources' ? 'tab-active' : ''}`}
+                    onClick={() => setActiveTab('sources')}
+                >
+                    Sources
                 </button>
             </div>
 
@@ -503,6 +513,14 @@ export function PersonPage() {
                             </div>
                         )}
                     </div>
+                )}
+
+                {activeTab === 'sources' && (
+                    <PersonSourceList
+                        treeId={treeId as Id<"trees">}
+                        personId={personId as Id<"people">}
+                        claims={person.claims as PersonClaim[]}
+                    />
                 )}
 
                 {showAddRel && (

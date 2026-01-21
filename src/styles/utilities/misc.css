@@ -15,6 +15,10 @@
     overflow: hidden !important;
 }
 
+.overflow-auto {
+    overflow: auto !important;
+}
+
 .w-full {
     width: 100% !important;
 }
