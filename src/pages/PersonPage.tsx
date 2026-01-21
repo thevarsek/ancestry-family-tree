@@ -1,24 +1,29 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useQuery } from 'convex/react';
+import { useMemo, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Doc, Id } from '../../convex/_generated/dataModel';
 import { AddRelationshipModal } from '../components/people/AddRelationshipModal';
+import { PersonModal } from '../components/people/PersonList';
 import { AddClaimModal } from '../components/claims/AddClaimModal';
 
-function RelationshipCard({
+type PersonClaim = Doc<"claims"> & { place?: Doc<"places"> | null };
+
+export function RelationshipCard({
     relationship,
-    person
+    person,
+    onDelete
 }: {
     relationship: Doc<"relationships">;
     person?: Doc<"people"> | null;
+    onDelete?: (id: Id<"relationships">) => void;
 }) {
     if (!person) {
         return null;
     }
 
     return (
-        <div className="card p-3 flex items-center justify-between">
+        <div className="card p-3 flex items-center justify-between group">
             <div className="flex items-center gap-3">
                 <div className="avatar">
                     <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>
@@ -35,15 +40,32 @@ function RelationshipCard({
                     </div>
                 </div>
             </div>
+            {onDelete && (
+                <button
+                    className="btn btn-ghost btn-icon btn-sm opacity-0 group-hover:opacity-100 transition-opacity text-error"
+                    onClick={() => onDelete(relationship._id)}
+                    title="Remove Relationship"
+                >
+                    ×
+                </button>
+            )}
         </div>
     );
 }
 
 export function PersonPage() {
     const { treeId, personId } = useParams<{ treeId: string; personId: string }>();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'overview' | 'relationships' | 'timeline'>('overview');
     const [showAddRel, setShowAddRel] = useState(false);
     const [showAddClaim, setShowAddClaim] = useState(false);
+    const [showEditProfile, setShowEditProfile] = useState(false);
+    const [defaultClaimType, setDefaultClaimType] = useState<
+        'birth' | 'death' | 'marriage' | 'divorce' | 'residence' | 'occupation' | 'education' | 'custom'
+    >('birth');
+
+    const deletePerson = useMutation(api.people.remove);
+    const removeRelationship = useMutation(api.relationships.remove);
 
     const person = useQuery(api.people.getWithClaims,
         personId ? { personId: personId as Id<"people"> } : "skip"
@@ -53,9 +75,41 @@ export function PersonPage() {
         personId ? { personId: personId as Id<"people"> } : "skip"
     );
 
+    const residenceClaims = useMemo(() => {
+        if (!person) return [];
+        return (person.claims as PersonClaim[]).filter(
+            (claim) => claim.claimType === 'residence' && Boolean(claim.place)
+        );
+    }, [person]);
+
     if (!person || !relationships) {
         return <div className="spinner spinner-lg mx-auto mt-12" />;
     }
+
+    const handleDelete = async () => {
+        if (!personId || !treeId) {
+            return;
+        }
+        const confirmed = window.confirm(
+            `Delete ${person.givenNames ?? ''} ${person.surnames ?? ''}? This will remove their relationships and claims.`
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        await deletePerson({ personId: personId as Id<"people"> });
+        navigate(`/tree/${treeId}`);
+    };
+
+    const handleDeleteRelationship = async (relId: Id<"relationships">) => {
+        if (!window.confirm("Remove this relationship?")) return;
+        try {
+            await removeRelationship({ relationshipId: relId });
+        } catch (error) {
+            console.error("Failed to remove relationship:", error);
+            alert("Failed to remove relationship");
+        }
+    };
 
     return (
         <div className="container py-8">
@@ -80,7 +134,12 @@ export function PersonPage() {
                             <span>{person.isLiving ? 'Living' : 'Deceased'}</span>
                         </div>
                     </div>
-                    <button className="btn btn-secondary">Edit Profile</button>
+                    <div className="flex gap-2">
+                        <button className="btn btn-secondary" onClick={() => setShowEditProfile(true)}>Edit Profile</button>
+                        <button className="btn btn-ghost text-error" onClick={handleDelete}>
+                            Delete
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -108,7 +167,10 @@ export function PersonPage() {
                                     <h3 className="card-title text-base">Life Events</h3>
                                     <button
                                         className="btn btn-ghost btn-sm"
-                                        onClick={() => setShowAddClaim(true)}
+                                        onClick={() => {
+                                            setDefaultClaimType('birth');
+                                            setShowAddClaim(true);
+                                        }}
                                     >
                                         +
                                     </button>
@@ -119,7 +181,7 @@ export function PersonPage() {
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
-                                        {person.claims.map((claim) => (
+                                        {person.claims.map((claim: PersonClaim) => (
                                             <div key={claim._id} className="flex gap-4">
                                                 <div className="w-24 text-sm text-muted text-right pt-1">
                                                     {claim.value.date || 'Unknown Date'}
@@ -173,6 +235,42 @@ export function PersonPage() {
                                     ))}
                                 </div>
                             </section>
+
+                            <section className="card">
+                                <div className="card-header border-b border-border-subtle pb-2 mb-4 flex justify-between items-center">
+                                    <h3 className="card-title text-base">Places Lived</h3>
+                                    <button
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={() => {
+                                            setDefaultClaimType('residence');
+                                            setShowAddClaim(true);
+                                        }}
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                                {residenceClaims.length === 0 ? (
+                                    <div className="text-center py-6 text-muted">
+                                        No residence places recorded yet.
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {residenceClaims.map((claim) => (
+                                            <div key={claim._id} className="flex items-start justify-between">
+                                                <div>
+                                                    <div className="font-medium">
+                                                        {claim.place?.displayName}
+                                                    </div>
+                                                    <div className="text-xs text-muted">
+                                                        {claim.value.date || 'Unknown date'}
+                                                    </div>
+                                                </div>
+                                                <span className="text-xs text-muted">Residence</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </section>
                         </div>
                     </div>
                 )}
@@ -202,11 +300,12 @@ export function PersonPage() {
                                         {list.length === 0 ? (
                                             <p className="text-sm text-muted italic">None recorded</p>
                                         ) : (
-                                            list.map((r) => (
+                                            list.map((r: { relationship: Doc<"relationships">; person?: Doc<"people"> | null }) => (
                                                 <RelationshipCard
                                                     key={r.relationship._id}
                                                     relationship={r.relationship}
                                                     person={r.person}
+                                                    onDelete={handleDeleteRelationship}
                                                 />
                                             ))
                                         )}
@@ -226,11 +325,21 @@ export function PersonPage() {
                     />
                 )}
 
+                {showEditProfile && (
+                    <PersonModal
+                        treeId={treeId as Id<"trees">}
+                        personId={personId as Id<"people">}
+                        initialData={person}
+                        onClose={() => setShowEditProfile(false)}
+                    />
+                )}
+
                 {showAddClaim && (
                     <AddClaimModal
                         treeId={treeId as Id<"trees">}
                         subjectId={personId as string}
                         subjectType="person"
+                        defaultClaimType={defaultClaimType}
                         onClose={() => setShowAddClaim(false)}
                     />
                 )}

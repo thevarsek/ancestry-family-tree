@@ -138,6 +138,14 @@ export function AddRelationshipModal({
                                     <span className="text-2xl block mb-2">👥</span>
                                     Sibling
                                 </button>
+                                <button
+                                    type="button"
+                                    className={`card p-4 text-center hover:border-accent ${relType === 'partner' ? 'border-accent ring-1 ring-accent' : ''}`}
+                                    onClick={() => handleTypeSelect('partner')}
+                                >
+                                    <span className="text-2xl block mb-2">❤️</span>
+                                    Partner
+                                </button>
                             </div>
 
                             <div className="flex justify-end mt-6">

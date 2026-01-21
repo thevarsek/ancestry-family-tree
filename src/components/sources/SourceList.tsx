@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
-import { Id } from '../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
+import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { CreateSourceModal } from './CreateSourceModal';
 
 export function SourceList({ treeId }: { treeId: Id<"trees"> }) {
@@ -13,10 +13,10 @@ export function SourceList({ treeId }: { treeId: Id<"trees"> }) {
         return <div className="spinner spinner-lg mx-auto mt-8" />;
     }
 
-    const filteredSources = sources.filter(s =>
-        s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.author?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredSources = sources.filter((source: Doc<"sources">) => {
+        const haystack = `${source.title} ${source.author ?? ''}`.toLowerCase();
+        return haystack.includes(searchQuery.toLowerCase());
+    });
 
     return (
         <div className="space-y-6">
@@ -43,7 +43,7 @@ export function SourceList({ treeId }: { treeId: Id<"trees"> }) {
             </div>
 
             <div className="grid grid-cols-1 gap-3">
-                {filteredSources.map((source) => (
+                {filteredSources.map((source: Doc<"sources">) => (
                     <div key={source._id} className="card p-4 hover:shadow-md transition-shadow cursor-pointer">
                         <div className="flex justify-between items-start">
                             <div>
@@ -75,7 +75,7 @@ export function SourceList({ treeId }: { treeId: Id<"trees"> }) {
 
                 {filteredSources.length === 0 && (
                     <div className="text-center py-8 text-muted">
-                        No sources found matching "{searchQuery}"
+                        No sources found matching &quot;{searchQuery}&quot;
                     </div>
                 )}
             </div>

@@ -1,19 +1,23 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useEffect } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { Link } from 'react-router-dom';
 import { api } from '../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
+import { Doc, Id } from '../../../convex/_generated/dataModel';
 
 type PersonGender = 'unknown' | 'male' | 'female' | 'other';
 
-export function CreatePersonModal({
+export function PersonModal({
     treeId,
     onClose,
-    onSuccess
+    onSuccess,
+    initialData,
+    personId
 }: {
     treeId: Id<"trees">;
     onClose: () => void;
     onSuccess?: (personId: Id<"people">) => void;
+    initialData?: Partial<Doc<"people">>;
+    personId?: Id<"people">;
 }) {
     const [formData, setFormData] = useState({
         givenNames: '',
@@ -21,21 +25,45 @@ export function CreatePersonModal({
         gender: 'unknown' as PersonGender,
         isLiving: true,
     });
+
+    useEffect(() => {
+        if (initialData) {
+            setFormData({
+                givenNames: initialData.givenNames || '',
+                surnames: initialData.surnames || '',
+                gender: (initialData.gender as PersonGender) || 'unknown',
+                isLiving: initialData.isLiving ?? true,
+            });
+        }
+    }, [initialData]);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const createPerson = useMutation(api.people.create);
+    const updatePerson = useMutation(api.people.patch);
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            const personId = await createPerson({
-                treeId,
-                ...formData,
-            });
-            if (onSuccess) onSuccess(personId);
+            let resultId: Id<"people">;
+
+            if (personId) {
+                await updatePerson({
+                    personId,
+                    ...formData,
+                });
+                resultId = personId;
+            } else {
+                resultId = await createPerson({
+                    treeId,
+                    ...formData,
+                });
+            }
+
+            if (onSuccess) onSuccess(resultId);
             onClose();
         } catch (error) {
-            console.error("Failed to create person:", error);
+            console.error("Failed to save person:", error);
         } finally {
             setIsSubmitting(false);
         }
@@ -46,7 +74,7 @@ export function CreatePersonModal({
             <div className="modal-backdrop" onClick={onClose} />
             <div className="modal">
                 <div className="modal-header">
-                    <h3 className="modal-title">Add New Person</h3>
+                    <h3 className="modal-title">{personId ? 'Edit Person' : 'Add New Person'}</h3>
                     <button className="btn btn-ghost btn-icon" onClick={onClose}>×</button>
                 </div>
                 <form onSubmit={handleSubmit}>
@@ -115,7 +143,7 @@ export function CreatePersonModal({
                             className="btn btn-primary"
                             disabled={isSubmitting || (!formData.givenNames && !formData.surnames)}
                         >
-                            {isSubmitting ? 'Adding...' : 'Add Person'}
+                            {isSubmitting ? 'Saving...' : (personId ? 'Save Changes' : 'Add Person')}
                         </button>
                     </div>
                 </form>
@@ -123,6 +151,8 @@ export function CreatePersonModal({
         </>
     );
 }
+
+export const CreatePersonModal = PersonModal; // Backwards compatibility for now
 
 export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
     const people = useQuery(api.people.list, { treeId, limit: 100 });
@@ -197,7 +227,7 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
             </div>
 
             {showCreate && (
-                <CreatePersonModal
+                <PersonModal
                     treeId={treeId}
                     onClose={() => setShowCreate(false)}
                 />

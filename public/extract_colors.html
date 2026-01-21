@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <img id="logo" src="/logo.png" style="display:none;" />
+    <div id="colors">Parsing...</div>
+    <script>
+        window.onload = function () {
+            const img = document.getElementById('logo');
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            const colorCounts = {};
+
+            for (let i = 0; i < imageData.length; i += 4) {
+                const r = imageData[i];
+                const g = imageData[i + 1];
+                const b = imageData[i + 2];
+                const a = imageData[i + 3];
+
+                if (a < 10) continue; // Skip transparent
+
+                const rgb = `${r},${g},${b}`;
+                colorCounts[rgb] = (colorCounts[rgb] || 0) + 1;
+            }
+
+            const sortedColors = Object.entries(colorCounts).sort((a, b) => b[1] - a[1]);
+            // Get top 3 distinct colors (simple distance check could be better but this is rough)
+            const topColors = sortedColors.slice(0, 5).map(c => {
+                const parts = c[0].split(',').map(Number);
+                return `#${parts.map(p => p.toString(16).padStart(2, '0')).join('')}`;
+            });
+
+            document.getElementById('colors').innerText = topColors.join(', ');
+        };
+    </script>
+</body>
+
+</html>

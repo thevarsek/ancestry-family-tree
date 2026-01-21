@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
@@ -12,15 +12,17 @@ export function AddClaimModal({
     subjectId,
     subjectType = "person",
     onClose,
-    onSuccess
+    onSuccess,
+    defaultClaimType
 }: {
     treeId: Id<"trees">;
     subjectId: string;
     subjectType?: "person" | "relationship";
     onClose: () => void;
     onSuccess?: () => void;
+    defaultClaimType?: ClaimType;
 }) {
-    const [claimType, setClaimType] = useState<ClaimType>('birth');
+    const [claimType, setClaimType] = useState<ClaimType>(defaultClaimType ?? 'birth');
     const [date, setDate] = useState('');
     const [placeId, setPlaceId] = useState<Id<"places"> | "">("");
     const [description, setDescription] = useState('');
@@ -28,6 +30,12 @@ export function AddClaimModal({
 
     const createClaim = useMutation(api.claims.create);
     const places = useQuery(api.places.list, { treeId, limit: 100 });
+
+    useEffect(() => {
+        if (defaultClaimType) {
+            setClaimType(defaultClaimType);
+        }
+    }, [defaultClaimType]);
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
