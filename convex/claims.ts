@@ -1,6 +1,7 @@
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireTreeAccess, requireTreeAdmin } from "./lib/auth";
+import { Id } from "./_generated/dataModel";
 
 const claimTypeValidator = v.union(
     v.literal("birth"),
@@ -253,6 +254,7 @@ export const update = mutation({
         claimId: v.id("claims"),
         claimType: claimTypeValidator,
         value: claimValueValidator,
+        relatedPersonIds: v.optional(v.array(v.id("people"))),
     },
     handler: async (ctx: MutationCtx, args) => {
         const claim = await ctx.db.get(args.claimId);
@@ -261,11 +263,134 @@ export const update = mutation({
         const { userId } = await requireTreeAdmin(ctx, claim.treeId);
         const now = Date.now();
 
+        // Update the main claim
+        const customFields = args.value.customFields as Record<string, unknown> | undefined;
+        const updatedValue = {
+            ...args.value,
+            customFields: {
+                ...customFields,
+                relatedPersonIds: args.relatedPersonIds,
+            },
+        };
+
         await ctx.db.patch(args.claimId, {
             claimType: args.claimType,
-            value: args.value,
+            value: updatedValue,
             updatedAt: now,
         });
+
+        // Handle related people claims
+        if (claim.subjectType === "person" && args.relatedPersonIds?.length) {
+            const uniqueRelatedIds = Array.from(new Set(args.relatedPersonIds))
+                .filter((id) => id !== claim.subjectId);
+
+            // Find existing related claims by querying all claims of the same type in the tree
+            // and checking if they have relatedPersonIds that include our subjectId
+            const allClaimsOfType = await ctx.db
+                .query("claims")
+                .withIndex("by_tree_type", (q) => q.eq("treeId", claim.treeId).eq("claimType", args.claimType))
+                .collect();
+
+            // Filter to find related claims (those that have our subjectId in their relatedPersonIds)
+            const existingRelatedClaims = allClaimsOfType.filter(c => {
+                if (c.subjectId === claim.subjectId) return false; // Skip the main claim
+                const customFields = c.value.customFields as { relatedPersonIds?: string[] } | undefined;
+                return customFields?.relatedPersonIds?.includes(claim.subjectId);
+            });
+
+            const existingRelatedIds = existingRelatedClaims.map(c => c.subjectId);
+            const newRelatedIds = uniqueRelatedIds.filter(id => !existingRelatedIds.includes(id as any));
+            const removedRelatedIds = existingRelatedIds.filter(id => !uniqueRelatedIds.includes(id as Id<"people">));
+
+            // Create new related claims
+            await Promise.all(
+                newRelatedIds.map(async (relatedId) => {
+                    const relatedClaimId = await ctx.db.insert("claims", {
+                        treeId: claim.treeId,
+                        subjectType: "person",
+                        subjectId: relatedId,
+                        claimType: args.claimType,
+                        value: updatedValue,
+                        status: claim.status,
+                        confidence: claim.confidence,
+                        createdBy: userId,
+                        createdAt: now,
+                        updatedAt: now,
+                    });
+
+                    const relatedText = [args.claimType, args.value.description, args.value.date]
+                        .filter(Boolean)
+                        .join(" ");
+
+                    await ctx.db.insert("searchableContent", {
+                        treeId: claim.treeId,
+                        entityType: "claim",
+                        entityId: relatedClaimId,
+                        content: relatedText,
+                        claimType: args.claimType,
+                        placeId: args.value.placeId,
+                        dateRange:
+                            args.value.date || args.value.dateEnd
+                                ? { start: args.value.date, end: args.value.dateEnd }
+                                : undefined,
+                        updatedAt: now,
+                    });
+                })
+            );
+
+            // Remove old related claims
+            await Promise.all(
+                removedRelatedIds.map(async (relatedId) => {
+                    const relatedClaim = existingRelatedClaims.find(c => c.subjectId === relatedId);
+                    if (relatedClaim) {
+                        await ctx.db.delete(relatedClaim._id);
+
+                        const relatedSearchable = await ctx.db
+                            .query("searchableContent")
+                            .withIndex("by_entity", (q) => q.eq("entityType", "claim").eq("entityId", relatedClaim._id))
+                            .unique();
+
+                        if (relatedSearchable) {
+                            await ctx.db.delete(relatedSearchable._id);
+                        }
+                    }
+                })
+            );
+
+            // Update existing related claims
+            await Promise.all(
+                existingRelatedClaims
+                    .filter(c => uniqueRelatedIds.includes(c.subjectId as Id<"people">))
+                    .map(async (relatedClaim) => {
+                        await ctx.db.patch(relatedClaim._id, {
+                            value: updatedValue,
+                            updatedAt: now,
+                        });
+
+                        const relatedSearchable = await ctx.db
+                            .query("searchableContent")
+                            .withIndex("by_entity", (q) => q.eq("entityType", "claim").eq("entityId", relatedClaim._id))
+                            .unique();
+
+                        if (relatedSearchable) {
+                            const relatedText = [args.claimType, args.value.description, args.value.date]
+                                .filter(Boolean)
+                                .join(" ");
+
+                            await ctx.db.patch(relatedSearchable._id, {
+                                content: relatedText,
+                                claimType: args.claimType,
+                                placeId: args.value.placeId,
+                                dateRange:
+                                    args.value.date || args.value.dateEnd
+                                        ? { start: args.value.date, end: args.value.dateEnd }
+                                        : undefined,
+                                updatedAt: now,
+                            });
+                        }
+                    })
+            );
+        }
 
         const searchableText = [args.claimType, args.value.description, args.value.date]
             .filter(Boolean)

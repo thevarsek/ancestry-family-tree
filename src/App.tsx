@@ -5,7 +5,6 @@ import { TreeList } from './components/trees/TreeList';
 import { TreePage } from './pages/TreePage';
 import { TreeSettings } from './pages/TreeSettings';
 import { PersonPage } from './pages/PersonPage';
-import { MediaProvider } from './context/MediaContext';
 import { UserButton } from "@clerk/clerk-react";
 import './App.css';
 

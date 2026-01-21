@@ -2,9 +2,13 @@ import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 
+interface PersonWithPhoto extends Doc<"people"> {
+    profilePhotoUrl?: string;
+}
+
 interface PedigreeChartProps {
     treeId: Id<"trees">;
-    people: Doc<"people">[];
+    people: PersonWithPhoto[];
     relationships: Doc<"relationships">[];
     rootPersonId: Id<"people">;
 }
@@ -13,7 +17,7 @@ type LinkType = 'parent' | 'spouse';
 
 interface ChartNode {
     id: Id<"people">;
-    person: Doc<"people">;
+    person: PersonWithPhoto;
     x: number;
     y: number;
     generation: number;
@@ -44,7 +48,7 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
 
     // Layout constants
     const NODE_WIDTH = 180;
-    const NODE_HEIGHT = 80;
+    const NODE_HEIGHT = 100;
     const HORIZONTAL_GAP = 100;
     const VERTICAL_GAP = 40;
     const GROUP_GAP = 40;
@@ -617,9 +621,41 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                                 strokeWidth={node.id === rootPersonId ? "3" : "1"}
                                 className="shadow-sm"
                             />
+                            {/* Profile picture or initials */}
+                            {node.person.profilePhotoUrl ? (
+                                <image
+                                    href={node.person.profilePhotoUrl}
+                                    x={NODE_WIDTH / 2 - 16}
+                                    y={8}
+                                    width={32}
+                                    height={32}
+                                    clipPath="circle(16px at center)"
+                                    preserveAspectRatio="xMidYMid slice"
+                                />
+                            ) : (
+                                <g>
+                                    <circle
+                                        cx={NODE_WIDTH / 2}
+                                        cy={24}
+                                        r="16"
+                                        fill="var(--color-accent-subtle)"
+                                        stroke="var(--color-border)"
+                                        strokeWidth="1"
+                                    />
+                                    <text
+                                        x={NODE_WIDTH / 2}
+                                        y={29}
+                                        textAnchor="middle"
+                                        className="font-bold text-sm"
+                                        fill="var(--color-text-primary)"
+                                    >
+                                        {(node.person.givenNames?.[0] || '') + (node.person.surnames?.[0] || '')}
+                                    </text>
+                                </g>
+                            )}
                             <text
                                 x={NODE_WIDTH / 2}
-                                y={35}
+                                y={node.person.profilePhotoUrl ? 60 : 55}
                                 textAnchor="middle"
                                 className="font-bold text-sm"
                                 fill="var(--color-text-primary)"
@@ -628,7 +664,7 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                             </text>
                             <text
                                 x={NODE_WIDTH / 2}
-                                y={55}
+                                y={node.person.profilePhotoUrl ? 75 : 70}
                                 textAnchor="middle"
                                 className="text-xs"
                                 fill="var(--color-text-muted)"

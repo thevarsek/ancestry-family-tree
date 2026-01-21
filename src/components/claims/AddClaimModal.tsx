@@ -13,6 +13,46 @@ type ClaimType =
 
 type MediaWithUrl = Doc<"media"> & { storageUrl?: string | null };
 
+function MediaItem({ media, isSelected, onToggle }: {
+    media: MediaWithUrl;
+    isSelected: boolean;
+    onToggle: () => void;
+}) {
+    const isImage = media.type === 'photo' && media.storageUrl;
+
+    return (
+        <label className="flex items-center gap-3 p-2 rounded hover:bg-surface-hover cursor-pointer">
+            <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={onToggle}
+                className="checkbox"
+            />
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+                {isImage ? (
+                    <img
+                        src={media.storageUrl ?? undefined}
+                        alt={media.title}
+                        className="w-12 h-12 object-cover rounded border"
+                        loading="lazy"
+                    />
+                ) : (
+                    <div className="w-12 h-12 bg-surface-muted rounded border flex items-center justify-center">
+                        <span className="text-xs text-muted capitalize">{media.type}</span>
+                    </div>
+                )}
+                <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{media.title}</div>
+                    <div className="text-xs text-muted">
+                        {media.type} • {new Date(media.createdAt ?? 0).toLocaleDateString()}
+                        {media.description && ` • ${media.description.slice(0, 40)}${media.description.length > 40 ? '...' : ''}`}
+                    </div>
+                </div>
+            </div>
+        </label>
+    );
+}
+
 export function AddClaimModal({
     treeId,
     subjectId,
@@ -396,22 +436,20 @@ export function AddClaimModal({
                             <div className="input-group">
                                 <label className="input-label">Media</label>
                                 <p className="text-xs text-muted">Optional. Attach media to this event.</p>
-                                <div className="border border-border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                                <div className="border border-border rounded-md p-3 space-y-1 max-h-64 overflow-y-auto">
                                     {(mediaList ?? []).map((item: MediaWithUrl) => (
-                                        <label key={item._id} className="flex items-center gap-2 text-sm">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedMediaIds.includes(item._id)}
-                                                onChange={(event) => {
-                                                    if (event.target.checked) {
-                                                        setSelectedMediaIds((prev) => [...prev, item._id]);
-                                                    } else {
-                                                        setSelectedMediaIds((prev) => prev.filter((id) => id !== item._id));
-                                                    }
-                                                }}
-                                            />
-                                            <span>{item.title}</span>
-                                        </label>
+                                        <MediaItem
+                                            key={item._id}
+                                            media={item}
+                                            isSelected={selectedMediaIds.includes(item._id)}
+                                            onToggle={() => {
+                                                if (selectedMediaIds.includes(item._id)) {
+                                                    setSelectedMediaIds((prev) => prev.filter((id) => id !== item._id));
+                                                } else {
+                                                    setSelectedMediaIds((prev) => [...prev, item._id]);
+                                                }
+                                            }}
+                                        />
                                     ))}
                                     {(mediaList?.length ?? 0) === 0 && (
                                         <p className="text-xs text-muted">No media added yet.</p>

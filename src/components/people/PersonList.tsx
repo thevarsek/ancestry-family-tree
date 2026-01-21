@@ -199,7 +199,7 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
         return fullName.includes(searchQuery.toLowerCase());
     });
 
-    if (people === undefined || profilePhotos === undefined) {
+    if (people === undefined) {
         return <div className="spinner spinner-lg mx-auto mt-8" />;
     }
 
@@ -208,6 +208,11 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
             [item.mediaId, item.storageUrl ?? undefined]
         )
     );
+
+    const getProfilePhotoUrl = (mediaId: Id<"media"> | undefined) => {
+        if (!mediaId || !profilePhotos) return undefined;
+        return profilePhotoMap.get(mediaId);
+    };
 
     return (
         <div className="space-y-6">
@@ -241,9 +246,9 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
                         className="card card-interactive cursor-pointer flex items-center gap-3 p-3 text-inherit no-underline hover:no-underline"
                     >
                         <div className="avatar overflow-hidden">
-                            {person.profilePhotoId && profilePhotoMap.get(person.profilePhotoId) ? (
+                            {person.profilePhotoId && getProfilePhotoUrl(person.profilePhotoId) ? (
                                 <img
-                                    src={profilePhotoMap.get(person.profilePhotoId) ?? undefined}
+                                    src={getProfilePhotoUrl(person.profilePhotoId) ?? undefined}
                                     alt={`${person.givenNames ?? ''} ${person.surnames ?? ''}`}
                                     className="w-full h-full object-cover"
                                 />

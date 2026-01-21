@@ -8,6 +8,15 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
     const treeData = useQuery(api.people.getTreeData, { treeId });
     const [rootPersonId, setRootPersonId] = useState<Id<"people"> | null>(null);
 
+    // Get profile photos for all people in the tree
+    const profilePhotoIds = treeData?.people
+        .map((person) => person.profilePhotoId)
+        .filter((id): id is Id<"media"> => Boolean(id)) ?? [];
+    const profilePhotos = useQuery(
+        api.media.getUrls,
+        profilePhotoIds.length ? { mediaIds: profilePhotoIds } : "skip"
+    );
+
     // Set initial root person to the first person found or someone with relationships
     useEffect(() => {
         if (treeData && treeData.people.length > 0 && !rootPersonId) {
@@ -41,6 +50,17 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
 
     const currentPerson = treeData.people.find((p: Doc<"people">) => p._id === rootPersonId);
 
+    // Create profile photo map
+    const profilePhotoMap = new Map(
+        (profilePhotos ?? []).map((item) => [item.mediaId, item.storageUrl ?? undefined])
+    );
+
+    // Combine people data with profile photos
+    const peopleWithPhotos = treeData.people.map((person) => ({
+        ...person,
+        profilePhotoUrl: person.profilePhotoId ? profilePhotoMap.get(person.profilePhotoId) : undefined
+    }));
+
     return (
         <div className="space-y-6">
             <div className="card p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -69,7 +89,7 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
             {rootPersonId && (
                 <PedigreeChart
                     treeId={treeId}
-                    people={treeData.people}
+                    people={peopleWithPhotos}
                     relationships={treeData.relationships}
                     rootPersonId={rootPersonId}
                 />
