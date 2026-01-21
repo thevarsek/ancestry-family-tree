@@ -1,0 +1,45 @@
+/* ─── Badges ─── */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-xs);
+    font-weight: var(--font-medium);
+    border-radius: var(--radius-full);
+}
+
+.badge-draft {
+    color: var(--color-status-draft);
+    background-color: var(--color-status-draft-bg);
+}
+
+.badge-accepted {
+    color: var(--color-status-accepted);
+    background-color: var(--color-status-accepted-bg);
+}
+
+.badge-disputed {
+    color: var(--color-status-disputed);
+    background-color: var(--color-status-disputed-bg);
+}
+
+.badge-info {
+    color: var(--color-info);
+    background-color: var(--color-info-bg);
+}
+
+.badge-relationship {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.badge-relationship-current {
+    color: var(--color-success);
+    background-color: var(--color-success-bg);
+}
+
+.badge-relationship-ended {
+    color: var(--color-warning);
+    background-color: var(--color-warning-bg);
+}

@@ -26,6 +26,9 @@ This document outlines the operational standards and coding best practices for A
 - **Modern JavaScript/TypeScript**:
   - Use `const` and `let`, never `var`.
   - Prefer functional programming patterns (immutability, pure functions).
+- **File Size**:
+  - Keep files under 400 lines and aim for 300 or fewer.
+  - Refactor files that exceed this unless there is a clear, unavoidable reason.
 
 ## 3. Architecture Patterns
 
@@ -38,3 +41,7 @@ This document outlines the operational standards and coding best practices for A
 
 - **Self-Documenting Code**: Write clear, descriptive variable and function names.
 - **Comments**: Explain *why* something is done, not just *what* is done, especially for complex logic.
+
+## 5. UX Patterns
+
+- **Destructive Actions**: Use in-app modals for confirmations instead of browser `confirm`/`alert`, and guard against double-triggered actions.

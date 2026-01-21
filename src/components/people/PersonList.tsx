@@ -39,7 +39,7 @@ export function PersonModal({
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const createPerson = useMutation(api.people.create);
-    const updatePerson = useMutation(api.people.patch);
+    const updatePerson = useMutation(api.people.update);
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();

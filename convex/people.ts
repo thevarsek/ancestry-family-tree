@@ -369,3 +369,27 @@ export const getRelationships = query({
         };
     },
 });
+/**
+ * Get all people and relationships in a tree for visualization
+ */
+export const getTreeData = query({
+    args: { treeId: v.id("trees") },
+    handler: async (ctx, args) => {
+        await requireTreeAccess(ctx, args.treeId);
+
+        const people = await ctx.db
+            .query("people")
+            .withIndex("by_tree", (q) => q.eq("treeId", args.treeId))
+            .collect();
+
+        const relationships = await ctx.db
+            .query("relationships")
+            .withIndex("by_tree", (q) => q.eq("treeId", args.treeId))
+            .collect();
+
+        return {
+            people,
+            relationships,
+        };
+    },
+});

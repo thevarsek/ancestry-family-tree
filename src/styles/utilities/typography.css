@@ -1,0 +1,108 @@
+/* ─── Typography ─── */
+.text-xs {
+    font-size: var(--text-xs) !important;
+}
+
+.text-sm {
+    font-size: var(--text-sm) !important;
+}
+
+.text-base {
+    font-size: var(--text-base) !important;
+}
+
+.text-lg {
+    font-size: var(--text-lg) !important;
+}
+
+.text-xl {
+    font-size: var(--text-xl) !important;
+}
+
+.text-2xl {
+    font-size: var(--text-2xl) !important;
+}
+
+.text-3xl {
+    font-size: var(--text-3xl) !important;
+}
+
+.font-normal {
+    font-weight: var(--font-normal) !important;
+}
+
+.font-medium {
+    font-weight: var(--font-medium) !important;
+}
+
+.font-semibold {
+    font-weight: var(--font-semibold) !important;
+}
+
+.font-bold {
+    font-weight: var(--font-bold) !important;
+}
+
+.text-center {
+    text-align: center !important;
+}
+
+.text-right {
+    text-align: right !important;
+}
+
+.text-left {
+    text-align: left !important;
+}
+
+.uppercase {
+    text-transform: uppercase !important;
+}
+
+.lowercase {
+    text-transform: lowercase !important;
+}
+
+.capitalize {
+    text-transform: capitalize !important;
+}
+
+.tracking-wider {
+    letter-spacing: 0.05em !important;
+}
+
+.text-muted {
+    color: var(--color-text-muted) !important;
+}
+
+.text-error {
+    color: var(--color-error) !important;
+}
+
+.text-accent {
+    color: var(--color-accent) !important;
+}
+
+.text-inherit {
+    color: inherit !important;
+}
+
+.no-underline {
+    text-decoration: none !important;
+}
+
+.hover\:underline:hover {
+    text-decoration: underline !important;
+}
+
+.hover\:no-underline:hover {
+    text-decoration: none !important;
+}
+
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}

@@ -5,53 +5,11 @@ import { api } from '../../convex/_generated/api';
 import type { Doc, Id } from '../../convex/_generated/dataModel';
 import { AddRelationshipModal } from '../components/people/AddRelationshipModal';
 import { PersonModal } from '../components/people/PersonList';
+import { RelationshipCard } from '../components/people/RelationshipCard';
 import { AddClaimModal } from '../components/claims/AddClaimModal';
+import { ConfirmModal } from '../components/ui/ConfirmModal';
 
 type PersonClaim = Doc<"claims"> & { place?: Doc<"places"> | null };
-
-export function RelationshipCard({
-    relationship,
-    person,
-    onDelete
-}: {
-    relationship: Doc<"relationships">;
-    person?: Doc<"people"> | null;
-    onDelete?: (id: Id<"relationships">) => void;
-}) {
-    if (!person) {
-        return null;
-    }
-
-    return (
-        <div className="card p-3 flex items-center justify-between group">
-            <div className="flex items-center gap-3">
-                <div className="avatar">
-                    <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>
-                </div>
-                <div>
-                    <div className="font-semibold">
-                        <Link to={`/tree/${person.treeId}/person/${person._id}`} className="hover:underline">
-                            {person.givenNames} {person.surnames}
-                        </Link>
-                    </div>
-                    <div className="text-xs text-muted capitalize">
-                        {relationship.type.replace('_', ' ')}
-                        {relationship.status !== 'current' && ` (${relationship.status})`}
-                    </div>
-                </div>
-            </div>
-            {onDelete && (
-                <button
-                    className="btn btn-ghost btn-icon btn-sm opacity-0 group-hover:opacity-100 transition-opacity text-error"
-                    onClick={() => onDelete(relationship._id)}
-                    title="Remove Relationship"
-                >
-                    ×
-                </button>
-            )}
-        </div>
-    );
-}
 
 export function PersonPage() {
     const { treeId, personId } = useParams<{ treeId: string; personId: string }>();
@@ -60,6 +18,11 @@ export function PersonPage() {
     const [showAddRel, setShowAddRel] = useState(false);
     const [showAddClaim, setShowAddClaim] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
+    const [pendingPersonDelete, setPendingPersonDelete] = useState(false);
+    const [isDeletingPerson, setIsDeletingPerson] = useState(false);
+    const [pendingRelationshipDelete, setPendingRelationshipDelete] = useState<Id<"relationships"> | null>(null);
+    const [isDeletingRelationship, setIsDeletingRelationship] = useState(false);
+    const [relationshipDeleteError, setRelationshipDeleteError] = useState<string | null>(null);
     const [defaultClaimType, setDefaultClaimType] = useState<
         'birth' | 'death' | 'marriage' | 'divorce' | 'residence' | 'occupation' | 'education' | 'custom'
     >('birth');
@@ -86,28 +49,58 @@ export function PersonPage() {
         return <div className="spinner spinner-lg mx-auto mt-12" />;
     }
 
-    const handleDelete = async () => {
-        if (!personId || !treeId) {
+    const handleDelete = () => {
+        if (!personId || !treeId || pendingPersonDelete) {
             return;
         }
-        const confirmed = window.confirm(
-            `Delete ${person.givenNames ?? ''} ${person.surnames ?? ''}? This will remove their relationships and claims.`
-        );
-        if (!confirmed) {
-            return;
-        }
-
-        await deletePerson({ personId: personId as Id<"people"> });
-        navigate(`/tree/${treeId}`);
+        setPendingPersonDelete(true);
     };
 
-    const handleDeleteRelationship = async (relId: Id<"relationships">) => {
-        if (!window.confirm("Remove this relationship?")) return;
+    const handleClosePersonDelete = () => {
+        setPendingPersonDelete(false);
+    };
+
+    const handleConfirmDeletePerson = async () => {
+        if (!personId || !treeId) {
+            setPendingPersonDelete(false);
+            return;
+        }
+        setIsDeletingPerson(true);
         try {
-            await removeRelationship({ relationshipId: relId });
+            await deletePerson({ personId: personId as Id<"people"> });
+            navigate(`/tree/${treeId}`);
+        } finally {
+            setIsDeletingPerson(false);
+            setPendingPersonDelete(false);
+        }
+    };
+
+    const handleDeleteRelationship = (relId: Id<"relationships">) => {
+        if (pendingRelationshipDelete) return;
+        setRelationshipDeleteError(null);
+        setPendingRelationshipDelete(relId);
+    };
+
+    const handleCloseRelationshipDelete = () => {
+        setPendingRelationshipDelete(null);
+        setRelationshipDeleteError(null);
+    };
+
+    const handleConfirmDeleteRelationship = async () => {
+        if (!pendingRelationshipDelete) return;
+        setIsDeletingRelationship(true);
+        let didRemove = false;
+        try {
+            await removeRelationship({ relationshipId: pendingRelationshipDelete });
+            didRemove = true;
         } catch (error) {
             console.error("Failed to remove relationship:", error);
-            alert("Failed to remove relationship");
+            setRelationshipDeleteError('Unable to remove this relationship. Please try again.');
+        } finally {
+            setIsDeletingRelationship(false);
+            if (didRemove) {
+                setPendingRelationshipDelete(null);
+            }
         }
     };
 
@@ -201,38 +194,29 @@ export function PersonPage() {
                         </div>
 
                         <div className="space-y-6">
-                            <section className="card">
+                            <section className="card p-4">
                                 <div className="card-header border-b border-border-subtle pb-2 mb-4 flex justify-between items-center">
                                     <h3 className="card-title text-base">Immediate Family</h3>
                                     <button className="btn btn-ghost btn-sm" onClick={() => { setActiveTab('relationships'); setShowAddRel(true); }}>
                                         +
                                     </button>
                                 </div>
-                                <div className="space-y-2">
-                                    {relationships.parents.map((r) => (
-                                        <div key={r.relationship._id} className="text-sm flex justify-between">
-                                            <span className="text-muted">Parent</span>
-                                            <Link to={`/tree/${treeId}/person/${r.person?._id}`} className="hover:underline">
-                                                {r.person?.givenNames} {r.person?.surnames}
-                                            </Link>
-                                        </div>
-                                    ))}
-                                    {relationships.spouses.map((r) => (
-                                        <div key={r.relationship._id} className="text-sm flex justify-between">
-                                            <span className="text-muted">Spouse</span>
-                                            <Link to={`/tree/${treeId}/person/${r.person?._id}`} className="hover:underline">
-                                                {r.person?.givenNames} {r.person?.surnames}
-                                            </Link>
-                                        </div>
-                                    ))}
-                                    {relationships.children.map((r) => (
-                                        <div key={r.relationship._id} className="text-sm flex justify-between">
-                                            <span className="text-muted">Child</span>
-                                            <Link to={`/tree/${treeId}/person/${r.person?._id}`} className="hover:underline">
-                                                {r.person?.givenNames} {r.person?.surnames}
-                                            </Link>
-                                        </div>
-                                    ))}
+                                <div className="space-y-3">
+                                    {relationships.parents.concat(relationships.spouses).concat(relationships.children).length === 0 ? (
+                                        <p className="text-center py-4 text-muted text-sm">None recorded</p>
+                                    ) : (
+                                        <>
+                                            {relationships.parents.map((r) => (
+                                                <RelationshipCard key={r.relationship._id} relationship={r.relationship} person={r.person} />
+                                            ))}
+                                            {relationships.spouses.map((r) => (
+                                                <RelationshipCard key={r.relationship._id} relationship={r.relationship} person={r.person} />
+                                            ))}
+                                            {relationships.children.map((r) => (
+                                                <RelationshipCard key={r.relationship._id} relationship={r.relationship} person={r.person} />
+                                            ))}
+                                        </>
+                                    )}
                                 </div>
                             </section>
 
@@ -287,7 +271,7 @@ export function PersonPage() {
                             </button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             {['Parents', 'Spouses', 'Siblings', 'Children'].map((category) => {
                                 const list = category === 'Parents' ? relationships.parents
                                     : category === 'Spouses' ? relationships.spouses
@@ -344,6 +328,29 @@ export function PersonPage() {
                     />
                 )}
             </div>
+            {pendingRelationshipDelete && (
+                <ConfirmModal
+                    title="Remove Relationship"
+                    description="This will remove the relationship from the tree. This action cannot be undone."
+                    confirmLabel="Remove Relationship"
+                    busyLabel="Removing..."
+                    isBusy={isDeletingRelationship}
+                    errorMessage={relationshipDeleteError}
+                    onClose={handleCloseRelationshipDelete}
+                    onConfirm={handleConfirmDeleteRelationship}
+                />
+            )}
+            {pendingPersonDelete && (
+                <ConfirmModal
+                    title="Delete Person"
+                    description={`Deleting ${person.givenNames} ${person.surnames} will also remove their relationships and claims. This action cannot be undone.`}
+                    confirmLabel="Delete Person"
+                    busyLabel="Deleting..."
+                    isBusy={isDeletingPerson}
+                    onClose={handleClosePersonDelete}
+                    onConfirm={handleConfirmDeletePerson}
+                />
+            )}
         </div>
     );
 }

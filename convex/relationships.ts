@@ -76,3 +76,36 @@ export const create = mutation({
         return relationshipId;
     },
 });
+
+/**
+ * Remove a relationship
+ */
+export const remove = mutation({
+    args: { relationshipId: v.id("relationships") },
+    handler: async (ctx, args) => {
+        const relationship = await ctx.db.get(args.relationshipId);
+        if (!relationship) {
+            throw new Error("Relationship not found");
+        }
+
+        const { userId } = await requireTreeAdmin(ctx, relationship.treeId);
+
+        await ctx.db.delete(args.relationshipId);
+
+        await ctx.db.insert("auditLog", {
+            treeId: relationship.treeId,
+            userId,
+            action: "relationship_deleted",
+            entityType: "relationship",
+            entityId: args.relationshipId,
+            changes: {
+                type: relationship.type,
+                p1: relationship.personId1,
+                p2: relationship.personId2,
+            },
+            timestamp: Date.now(),
+        });
+
+        return args.relationshipId;
+    },
+});

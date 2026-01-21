@@ -45,9 +45,9 @@ export function TreePage() {
                         <p className="text-muted">{tree.description}</p>
                     </div>
                     <div className="flex gap-2">
-                        <button className="btn btn-secondary">
+                        <Link to={`/tree/${tree._id}/settings`} className="btn btn-secondary">
                             Settings
-                        </button>
+                        </Link>
                         <button className="btn btn-secondary">
                             Invite
                         </button>

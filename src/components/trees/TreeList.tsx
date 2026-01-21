@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery, useMutation, useConvexAuth } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useUser } from '@clerk/clerk-react';
@@ -76,11 +76,19 @@ export function CreateTreeModal({ onClose }: { onClose: () => void }) {
 export function TreeList() {
     const navigate = useNavigate();
     const { isAuthenticated, isLoading } = useConvexAuth();
+    const { user } = useUser();
+    const syncUser = useMutation(api.users.getOrCreate);
     const trees = useQuery(api.trees.list, isAuthenticated ? {} : 'skip');
     const visibleTrees = (trees ?? []).filter(
         (tree): tree is NonNullable<typeof tree> => tree !== null
     );
     const [showCreate, setShowCreate] = useState(false);
+
+    useEffect(() => {
+        if (isAuthenticated && user) {
+            syncUser();
+        }
+    }, [isAuthenticated, syncUser, user]);
 
     if (isLoading) {
         return <div className="spinner spinner-lg mx-auto mt-12" />;
@@ -89,16 +97,6 @@ export function TreeList() {
     if (!isAuthenticated) {
         return null;
     }
-    const { user } = useUser();
-
-    // Handle user sync on first load
-    const syncUser = useMutation(api.users.getOrCreate);
-    useState(() => {
-        if (user) {
-            syncUser();
-        }
-    });
-
     if (trees === undefined) {
         return (
             <div className="py-12 text-center">

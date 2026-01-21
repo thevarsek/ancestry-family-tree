@@ -11,23 +11,28 @@
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
   --color-surface-overlay: rgba(255, 255, 255, 0.95);
-  
-  --color-border: #d6d3d1;
-  --color-border-subtle: #e7e5e4;
-  --color-border-focus: #854d0e;
-  
+
+  --color-border: #e7e5e4;
+  --color-border-subtle: #eeede6;
+  --color-border-emphasis: #d6d3d1;
+  --color-border-focus: #ad8aff;
+
   --color-text-primary: #1c1917;
   --color-text-secondary: #57534e;
   --color-text-muted: #a8a29e;
-  --color-text-inverse: #fafaf9;
-  
-  /* Accent - Warm Amber */
-  --color-accent: #854d0e;
-  --color-accent-hover: #713f12;
-  --color-accent-active: #5c320e;
-  --color-accent-subtle: #fef3c7;
-  --color-accent-muted: #fde68a;
-  
+  --color-text-inverse: #ffffff;
+
+  /* Accent - Brand Purple & Orange */
+  --color-accent: #ad8aff;
+  --color-accent-hover: #9666ff;
+  --color-accent-active: #7f42ff;
+  --color-accent-subtle: #f3efff;
+  --color-accent-muted: #e7e0ff;
+
+  --color-secondary: #ff7c1e;
+  --color-secondary-hover: #f56e0a;
+  --color-secondary-bg: #fff5ed;
+
   /* Semantic */
   --color-success: #166534;
   --color-success-bg: #dcfce7;
@@ -37,7 +42,7 @@
   --color-error-bg: #fee2e2;
   --color-info: #1e40af;
   --color-info-bg: #dbeafe;
-  
+
   /* Claim Status */
   --color-status-draft: #57534e;
   --color-status-draft-bg: #f5f5f4;
@@ -45,65 +50,89 @@
   --color-status-accepted-bg: #dcfce7;
   --color-status-disputed: #b45309;
   --color-status-disputed-bg: #fef3c7;
-  
+
   /* ─── Typography ─── */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-serif: 'Merriweather', Georgia, 'Times New Roman', serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, 'Inconsolata', monospace;
-  
-  --text-xs: 0.75rem;      /* 12px */
-  --text-sm: 0.875rem;     /* 14px */
-  --text-base: 1rem;       /* 16px */
-  --text-lg: 1.125rem;     /* 18px */
-  --text-xl: 1.25rem;      /* 20px */
-  --text-2xl: 1.5rem;      /* 24px */
-  --text-3xl: 1.875rem;    /* 30px */
-  --text-4xl: 2.25rem;     /* 36px */
-  
+
+  --text-xs: 0.75rem;
+  /* 12px */
+  --text-sm: 0.875rem;
+  /* 14px */
+  --text-base: 1rem;
+  /* 16px */
+  --text-lg: 1.125rem;
+  /* 18px */
+  --text-xl: 1.25rem;
+  /* 20px */
+  --text-2xl: 1.5rem;
+  /* 24px */
+  --text-3xl: 1.875rem;
+  /* 30px */
+  --text-4xl: 2.25rem;
+  /* 36px */
+
   --leading-tight: 1.25;
   --leading-normal: 1.5;
   --leading-relaxed: 1.75;
-  
+
   --font-normal: 400;
   --font-medium: 500;
   --font-semibold: 600;
   --font-bold: 700;
-  
+
   /* ─── Spacing ─── */
   --space-0: 0;
-  --space-1: 0.25rem;      /* 4px */
-  --space-2: 0.5rem;       /* 8px */
-  --space-3: 0.75rem;      /* 12px */
-  --space-4: 1rem;         /* 16px */
-  --space-5: 1.25rem;      /* 20px */
-  --space-6: 1.5rem;       /* 24px */
-  --space-8: 2rem;         /* 32px */
-  --space-10: 2.5rem;      /* 40px */
-  --space-12: 3rem;        /* 48px */
-  --space-16: 4rem;        /* 64px */
-  --space-20: 5rem;        /* 80px */
-  
+  --space-1: 0.25rem;
+  /* 4px */
+  --space-2: 0.5rem;
+  /* 8px */
+  --space-3: 0.75rem;
+  /* 12px */
+  --space-4: 1rem;
+  /* 16px */
+  --space-5: 1.25rem;
+  /* 20px */
+  --space-6: 1.5rem;
+  /* 24px */
+  --space-8: 2rem;
+  /* 32px */
+  --space-10: 2.5rem;
+  /* 40px */
+  --space-12: 3rem;
+  /* 48px */
+  --space-16: 4rem;
+  /* 64px */
+  --space-20: 5rem;
+  /* 80px */
+
   /* ─── Shadows ─── */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
-  
+
   /* ─── Border Radius ─── */
-  --radius-sm: 0.25rem;    /* 4px */
-  --radius-md: 0.5rem;     /* 8px */
-  --radius-lg: 0.75rem;    /* 12px */
-  --radius-xl: 1rem;       /* 16px */
-  --radius-2xl: 1.5rem;    /* 24px */
+  --radius-sm: 0.25rem;
+  /* 4px */
+  --radius-md: 0.5rem;
+  /* 8px */
+  --radius-lg: 0.75rem;
+  /* 12px */
+  --radius-xl: 1rem;
+  /* 16px */
+  --radius-2xl: 1.5rem;
+  /* 24px */
   --radius-full: 9999px;
-  
+
   /* ─── Transitions ─── */
   --transition-fast: 100ms ease;
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
   --transition-bounce: 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  
+
   /* ─── Z-Index ─── */
   --z-dropdown: 100;
   --z-sticky: 200;
@@ -111,7 +140,7 @@
   --z-modal: 400;
   --z-tooltip: 500;
   --z-toast: 600;
-  
+
   /* ─── Container ─── */
   --container-sm: 640px;
   --container-md: 768px;
@@ -127,31 +156,35 @@
   --color-surface: #292524;
   --color-surface-raised: #3f3a36;
   --color-surface-overlay: rgba(41, 37, 36, 0.95);
-  
+
   --color-border: #57534e;
   --color-border-subtle: #44403c;
   --color-border-focus: #fbbf24;
-  
+
   --color-text-primary: #fafaf9;
   --color-text-secondary: #d6d3d1;
   --color-text-muted: #a8a29e;
   --color-text-inverse: #1c1917;
-  
-  --color-accent: #fbbf24;
-  --color-accent-hover: #fcd34d;
-  --color-accent-active: #fde68a;
-  --color-accent-subtle: #422006;
-  --color-accent-muted: #78350f;
-  
+
+  --color-accent: #dcaaff;
+  --color-accent-hover: #ad8aff;
+  --color-accent-active: #9666ff;
+  --color-accent-subtle: #2d1b4d;
+  --color-accent-muted: #4a2b84;
+
+  --color-secondary: #ff9d52;
+  --color-secondary-hover: #ff7c1e;
+  --color-secondary-bg: #4a240a;
+
   --color-success-bg: #14532d;
   --color-warning-bg: #78350f;
   --color-error-bg: #7f1d1d;
   --color-info-bg: #1e3a8a;
-  
+
   --color-status-draft-bg: #44403c;
   --color-status-accepted-bg: #14532d;
   --color-status-disputed-bg: #78350f;
-  
+
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
@@ -161,7 +194,9 @@
    Global Reset & Base Styles
    ═══════════════════════════════════════════════════════════ */
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -190,18 +225,40 @@ body {
 }
 
 /* ─── Typography Base ─── */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-weight: var(--font-semibold);
   line-height: var(--leading-tight);
   color: var(--color-text-primary);
 }
 
-h1 { font-size: var(--text-3xl); }
-h2 { font-size: var(--text-2xl); }
-h3 { font-size: var(--text-xl); }
-h4 { font-size: var(--text-lg); }
-h5 { font-size: var(--text-base); }
-h6 { font-size: var(--text-sm); }
+h1 {
+  font-size: var(--text-3xl);
+}
+
+h2 {
+  font-size: var(--text-2xl);
+}
+
+h3 {
+  font-size: var(--text-xl);
+}
+
+h4 {
+  font-size: var(--text-lg);
+}
+
+h5 {
+  font-size: var(--text-base);
+}
+
+h6 {
+  font-size: var(--text-sm);
+}
 
 p {
   margin-bottom: var(--space-4);
@@ -274,17 +331,28 @@ a:hover {
 }
 
 @media (min-width: 640px) {
-  .container { padding: 0 var(--space-6); }
+  .container {
+    padding: 0 var(--space-6);
+  }
 }
 
 @media (min-width: 1024px) {
-  .container { padding: 0 var(--space-8); }
+  .container {
+    padding: 0 var(--space-8);
+  }
 }
 
 /* ─── Skeleton Loading ─── */
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .skeleton {
@@ -295,8 +363,15 @@ a:hover {
 
 /* ─── Fade In Animation ─── */
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {

@@ -33,23 +33,25 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 64px;
+    height: 72px;
 }
 
 .logo {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-4);
 }
 
-.logo-icon {
-    font-size: var(--text-2xl);
+.logo-img {
+    height: 32px;
+    width: auto;
 }
 
 .logo-text {
-    font-size: var(--text-xl);
+    font-size: var(--text-lg);
     font-weight: var(--font-bold);
     color: var(--color-text-primary);
+    letter-spacing: -0.025em;
 }
 
 .header-nav {

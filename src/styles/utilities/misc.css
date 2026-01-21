@@ -1,0 +1,64 @@
+/* ─── Miscellaneous ─── */
+.cursor-pointer {
+    cursor: pointer !important;
+}
+
+.relative {
+    position: relative !important;
+}
+
+.absolute {
+    position: absolute !important;
+}
+
+.overflow-hidden {
+    overflow: hidden !important;
+}
+
+.w-full {
+    width: 100% !important;
+}
+
+.h-full {
+    height: 100% !important;
+}
+
+.w-24 {
+    width: 6rem !important;
+}
+
+.opacity-0 {
+    opacity: 0 !important;
+}
+
+.group:hover .group-hover\:opacity-100 {
+    opacity: 1 !important;
+}
+
+.transition-all {
+    transition: all var(--transition-normal) !important;
+}
+
+.transition-opacity {
+    transition: opacity var(--transition-normal) !important;
+}
+
+.bg-border {
+    background-color: var(--color-border) !important;
+}
+
+.bg-border-subtle {
+    background-color: var(--color-border-subtle) !important;
+}
+
+.border-l {
+    border-left: 1px solid var(--color-border) !important;
+}
+
+.border-b {
+    border-bottom: 1px solid var(--color-border) !important;
+}
+
+.rounded-full {
+    border-radius: var(--radius-full) !important;
+}
