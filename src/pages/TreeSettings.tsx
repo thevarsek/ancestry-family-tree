@@ -168,7 +168,7 @@ export function TreeSettings() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
-                                    {(members || []).map((member) => member && (
+                                    {(members || []).map((member: any) => member && (
                                         <tr key={member.userId} className="group">
                                             <td className="py-3">
                                                 <div className="flex items-center gap-3">
@@ -264,7 +264,7 @@ export function TreeSettings() {
                         <h2 className="text-lg font-bold mb-4">Pending Invitations</h2>
                         {invitations && invitations.length > 0 ? (
                             <div className="space-y-3">
-                                {invitations.map((inv) => (
+                                {invitations.map((inv: any) => (
                                     <div key={inv._id} className="flex justify-between items-center text-sm p-3 bg-bg-secondary rounded-lg">
                                         <div>
                                             <div className="font-medium">{inv.email}</div>
