@@ -182,6 +182,127 @@ export const create = mutation({
 });
 
 /**
+ * Update a claim's details
+ */
+export const update = mutation({
+    args: {
+        claimId: v.id("claims"),
+        claimType: claimTypeValidator,
+        value: claimValueValidator,
+    },
+    handler: async (ctx, args) => {
+        const claim = await ctx.db.get(args.claimId);
+        if (!claim) throw new Error("Claim not found");
+
+        const { userId } = await requireTreeAdmin(ctx, claim.treeId);
+        const now = Date.now();
+
+        await ctx.db.patch(args.claimId, {
+            claimType: args.claimType,
+            value: args.value,
+            updatedAt: now,
+        });
+
+        const searchableText = [args.claimType, args.value.description, args.value.date]
+            .filter(Boolean)
+            .join(" ");
+
+        const searchableEntry = await ctx.db
+            .query("searchableContent")
+            .withIndex("by_entity", (q) => q.eq("entityType", "claim").eq("entityId", args.claimId))
+            .unique();
+
+        if (searchableEntry) {
+            await ctx.db.patch(searchableEntry._id, {
+                content: searchableText,
+                claimType: args.claimType,
+                placeId: args.value.placeId,
+                dateRange:
+                    args.value.date || args.value.dateEnd
+                        ? { start: args.value.date, end: args.value.dateEnd }
+                        : undefined,
+                updatedAt: now,
+            });
+        } else {
+            await ctx.db.insert("searchableContent", {
+                treeId: claim.treeId,
+                entityType: "claim",
+                entityId: args.claimId,
+                content: searchableText,
+                claimType: args.claimType,
+                placeId: args.value.placeId,
+                dateRange:
+                    args.value.date || args.value.dateEnd
+                        ? { start: args.value.date, end: args.value.dateEnd }
+                        : undefined,
+                updatedAt: now,
+            });
+        }
+
+        await ctx.db.insert("auditLog", {
+            treeId: claim.treeId,
+            userId,
+            action: "claim_updated",
+            entityType: "claim",
+            entityId: args.claimId,
+            changes: { claimType: args.claimType, value: args.value },
+            timestamp: now,
+        });
+
+        return args.claimId;
+    },
+});
+
+/**
+ * Remove a claim
+ */
+export const remove = mutation({
+    args: { claimId: v.id("claims") },
+    handler: async (ctx, args) => {
+        const claim = await ctx.db.get(args.claimId);
+        if (!claim) throw new Error("Claim not found");
+
+        const { userId } = await requireTreeAdmin(ctx, claim.treeId);
+
+        const claimCitations = await ctx.db
+            .query("claimCitations")
+            .withIndex("by_claim", (q) => q.eq("claimId", args.claimId))
+            .collect();
+
+        await Promise.all(claimCitations.map((cc) => ctx.db.delete(cc._id)));
+
+        const claimDisputes = await ctx.db
+            .query("claimDisputes")
+            .withIndex("by_claim", (q) => q.eq("claimId", args.claimId))
+            .collect();
+
+        await Promise.all(claimDisputes.map((dispute) => ctx.db.delete(dispute._id)));
+
+        const searchableEntry = await ctx.db
+            .query("searchableContent")
+            .withIndex("by_entity", (q) => q.eq("entityType", "claim").eq("entityId", args.claimId))
+            .unique();
+
+        if (searchableEntry) {
+            await ctx.db.delete(searchableEntry._id);
+        }
+
+        await ctx.db.delete(args.claimId);
+
+        await ctx.db.insert("auditLog", {
+            treeId: claim.treeId,
+            userId,
+            action: "claim_deleted",
+            entityType: "claim",
+            entityId: args.claimId,
+            timestamp: Date.now(),
+        });
+
+        return args.claimId;
+    },
+});
+
+/**
  * Update a claim's status (accept/dispute)
  */
 export const updateStatus = mutation({

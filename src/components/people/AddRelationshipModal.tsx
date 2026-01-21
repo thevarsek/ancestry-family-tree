@@ -23,7 +23,7 @@ export function AddRelationshipModal({
     const [step, setStep] = useState<'type' | 'select_person'>('type');
     const [relType, setRelType] = useState<RelationshipType | null>(null);
     const [role, setRole] = useState<RelationshipRole>('parent');
-    const [selectedPersonId, setSelectedPersonId] = useState<Id<"people"> | null>(null);
+    const [selectedPersonIds, setSelectedPersonIds] = useState<Id<"people">[]>([]);
     const [showCreatePerson, setShowCreatePerson] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -50,7 +50,7 @@ export function AddRelationshipModal({
         if (nextRole) {
             setRole(nextRole);
         }
-        setSelectedPersonId(null);
+        setSelectedPersonIds([]);
     };
 
     const handleContinue = () => {
@@ -59,39 +59,41 @@ export function AddRelationshipModal({
     };
 
     const handleSubmit = async () => {
-        if (!selectedPersonId || !relType) return;
+        if (selectedPersonIds.length === 0 || !relType) return;
         setIsSubmitting(true);
 
         try {
-            // Determine p1 and p2 based on type and role
-            // For parent_child: p1 is parent, p2 is child
-            let p1 = personId;
-            let p2 = selectedPersonId;
+            await Promise.all(selectedPersonIds.map(async (selectedPersonId) => {
+                // Determine p1 and p2 based on type and role
+                // For parent_child: p1 is parent, p2 is child
+                let p1 = personId;
+                let p2 = selectedPersonId;
 
-            if (relType === 'parent_child') {
-                if (role === 'parent') {
-                    // Selected person is parent OF current person
-                    p1 = selectedPersonId; // parent
-                    p2 = personId;         // child
+                if (relType === 'parent_child') {
+                    if (role === 'parent') {
+                        // Selected person is parent OF current person
+                        p1 = selectedPersonId; // parent
+                        p2 = personId;         // child
+                    } else {
+                        // Selected person is child OF current person
+                        p1 = personId;         // parent
+                        p2 = selectedPersonId; // child
+                    }
                 } else {
-                    // Selected person is child OF current person
-                    p1 = personId;         // parent
-                    p2 = selectedPersonId; // child
+                    // Spouse/Sibling: order doesn't matter strictly, but let's keep consistent?
+                    // Schema doesn't enforce order for symmetric, but let's stick to p1=current
+                    p1 = personId;
+                    p2 = selectedPersonId;
                 }
-            } else {
-                // Spouse/Sibling: order doesn't matter strictly, but let's keep consistent?
-                // Schema doesn't enforce order for symmetric, but let's stick to p1=current
-                p1 = personId;
-                p2 = selectedPersonId;
-            }
 
-            await createRelationship({
-                treeId,
-                personId1: p1,
-                personId2: p2,
-                type: relType,
-                status: relType === 'spouse' || relType === 'partner' ? 'current' : undefined,
-            });
+                await createRelationship({
+                    treeId,
+                    personId1: p1,
+                    personId2: p2,
+                    type: relType,
+                    status: relType === 'spouse' || relType === 'partner' ? 'current' : undefined,
+                });
+            }));
 
             if (onSuccess) onSuccess();
             onClose();
@@ -195,7 +197,7 @@ export function AddRelationshipModal({
                                         ←
                                     </button>
                                     <p className="font-medium">
-                                        Select a person to link
+                                        Select people to link
                                     </p>
                                 </div>
                                 <div className="rounded-md border border-border-subtle bg-surface-muted p-3 text-sm">
@@ -204,7 +206,7 @@ export function AddRelationshipModal({
                                         {relationshipLabel}
                                     </div>
                                     <div className="text-xs text-muted mt-1">
-                                        You are linking someone to {personName}. Select an existing person or create a new one.
+                                        You are linking people to {personName}. Select one or more existing people or create a new one.
                                     </div>
                                 </div>
                             </div>
@@ -217,11 +219,19 @@ export function AddRelationshipModal({
                             />
 
                             <div className="h-64 overflow-y-auto border border-border rounded-md p-3 space-y-3">
-                                {filteredPeople?.map(person => (
+                                {filteredPeople?.map(person => {
+                                    const isSelected = selectedPersonIds.includes(person._id);
+                                    return (
                                     <div
                                         key={person._id}
-                                        className={`p-3 rounded cursor-pointer flex items-center gap-3 border ${selectedPersonId === person._id ? 'bg-primary/10 border-primary' : 'border-transparent hover:bg-surface-hover'}`}
-                                        onClick={() => setSelectedPersonId(person._id)}
+                                        className={`p-3 rounded cursor-pointer flex items-center gap-3 border ${isSelected ? 'bg-primary/10 border-primary' : 'border-transparent hover:bg-surface-hover'}`}
+                                        onClick={() => {
+                                            setSelectedPersonIds((prev) => (
+                                                prev.includes(person._id)
+                                                    ? prev.filter((id) => id !== person._id)
+                                                    : [...prev, person._id]
+                                            ));
+                                        }}
                                     >
                                         <div className="avatar avatar-sm">
                                             <span>{(person.givenNames?.[0] || '')}</span>
@@ -230,11 +240,11 @@ export function AddRelationshipModal({
                                             <div className="font-medium">{person.givenNames} {person.surnames}</div>
                                             <div className="text-xs text-muted">{person.isLiving ? 'Living' : 'Deceased'}</div>
                                         </div>
-                                        {selectedPersonId === person._id && (
+                                        {isSelected && (
                                             <div className="ml-auto text-xs text-accent">Selected</div>
                                         )}
                                     </div>
-                                ))}
+                                );})}
                                 {filteredPeople?.length === 0 && (
                                     <p className="text-center text-muted py-4">No matching people found.</p>
                                 )}
@@ -265,10 +275,10 @@ export function AddRelationshipModal({
                         <button
                             type="button"
                             className="btn btn-primary w-full"
-                            disabled={!selectedPersonId || isSubmitting}
+                            disabled={selectedPersonIds.length === 0 || isSubmitting}
                             onClick={handleSubmit}
                         >
-                            {isSubmitting ? 'Linking...' : 'Add Relationship'}
+                            {isSubmitting ? 'Linking...' : 'Add Relationships'}
                         </button>
                     )}
                 </div>
@@ -278,7 +288,7 @@ export function AddRelationshipModal({
                     treeId={treeId}
                     onClose={() => setShowCreatePerson(false)}
                     onSuccess={(newPersonId) => {
-                        setSelectedPersonId(newPersonId);
+                        setSelectedPersonIds((prev) => [...prev, newPersonId]);
                         setShowCreatePerson(false);
                     }}
                 />

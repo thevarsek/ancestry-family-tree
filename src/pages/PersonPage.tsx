@@ -7,6 +7,9 @@ import { AddRelationshipModal } from '../components/people/AddRelationshipModal'
 import { PersonModal } from '../components/people/PersonList';
 import { RelationshipCard } from '../components/people/RelationshipCard';
 import { AddClaimModal } from '../components/claims/AddClaimModal';
+import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import { defaultLeafletIcon } from '../components/places/leafletIcon';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 
 type PersonClaim = Doc<"claims"> & { place?: Doc<"places"> | null };
@@ -14,10 +17,14 @@ type PersonClaim = Doc<"claims"> & { place?: Doc<"places"> | null };
 export function PersonPage() {
     const { treeId, personId } = useParams<{ treeId: string; personId: string }>();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState<'overview' | 'relationships' | 'timeline'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'relationships' | 'places'>('overview');
     const [showAddRel, setShowAddRel] = useState(false);
     const [showAddClaim, setShowAddClaim] = useState(false);
     const [showEditProfile, setShowEditProfile] = useState(false);
+    const [editingClaim, setEditingClaim] = useState<PersonClaim | null>(null);
+    const [pendingClaimDelete, setPendingClaimDelete] = useState<Id<"claims"> | null>(null);
+    const [isDeletingClaim, setIsDeletingClaim] = useState(false);
+    const [claimDeleteError, setClaimDeleteError] = useState<string | null>(null);
     const [pendingPersonDelete, setPendingPersonDelete] = useState(false);
     const [isDeletingPerson, setIsDeletingPerson] = useState(false);
     const [pendingRelationshipDelete, setPendingRelationshipDelete] = useState<Id<"relationships"> | null>(null);
@@ -29,6 +36,7 @@ export function PersonPage() {
 
     const deletePerson = useMutation(api.people.remove);
     const removeRelationship = useMutation(api.relationships.remove);
+    const removeClaim = useMutation(api.claims.remove);
 
     const person = useQuery(api.people.getWithClaims,
         personId ? { personId: personId as Id<"people"> } : "skip"
@@ -44,6 +52,45 @@ export function PersonPage() {
             (claim) => claim.claimType === 'residence' && Boolean(claim.place)
         );
     }, [person]);
+
+    const placeClaims = useMemo(() => {
+        if (!person) return [];
+        return (person.claims as PersonClaim[]).filter((claim) => Boolean(claim.place));
+    }, [person]);
+
+    const placeGroups = useMemo(() => {
+        const grouped = new Map<string, { place: PersonClaim['place']; claims: PersonClaim[] }>();
+        placeClaims.forEach((claim) => {
+            const placeId = claim.place?._id;
+            if (!placeId) return;
+            const entry = grouped.get(placeId) ?? { place: claim.place, claims: [] };
+            entry.claims.push(claim);
+            grouped.set(placeId, entry);
+        });
+        return Array.from(grouped.values()).sort((a, b) =>
+            (a.place?.displayName ?? '').localeCompare(b.place?.displayName ?? '')
+        );
+    }, [placeClaims]);
+
+    const mapPlaces = useMemo(
+        () => placeGroups
+            .map((group) => group.place)
+            .filter((place): place is Doc<"places"> => Boolean(place?.latitude && place?.longitude)),
+        [placeGroups]
+    );
+
+    const mapCenter = useMemo(() => {
+        if (mapPlaces.length === 0) return [20, 0] as [number, number];
+        const sum = mapPlaces.reduce(
+            (acc, place) => {
+                acc.lat += place.latitude ?? 0;
+                acc.lng += place.longitude ?? 0;
+                return acc;
+            },
+            { lat: 0, lng: 0 }
+        );
+        return [sum.lat / mapPlaces.length, sum.lng / mapPlaces.length] as [number, number];
+    }, [mapPlaces]);
 
     if (!person || !relationships) {
         return <div className="spinner spinner-lg mx-auto mt-12" />;
@@ -149,6 +196,12 @@ export function PersonPage() {
                 >
                     Relationships
                 </button>
+                <button
+                    className={`tab ${activeTab === 'places' ? 'tab-active' : ''}`}
+                    onClick={() => setActiveTab('places')}
+                >
+                    Places
+                </button>
             </div>
 
             <div className="animate-fade-in">
@@ -162,6 +215,7 @@ export function PersonPage() {
                                         className="btn btn-ghost btn-sm"
                                         onClick={() => {
                                             setDefaultClaimType('birth');
+                                            setEditingClaim(null);
                                             setShowAddClaim(true);
                                         }}
                                     >
@@ -181,10 +235,38 @@ export function PersonPage() {
                                                 </div>
                                                 <div className="flex-1 pb-4 border-l border-border-subtle pl-4 relative">
                                                     <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-border" />
-                                                    <h4 className="font-medium capitalize">{claim.claimType}</h4>
-                                                    <p className="text-sm text-muted">
-                                                        {claim.place?.displayName}
-                                                    </p>
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <h4 className="font-medium capitalize">
+                                                                {claim.claimType === 'custom'
+                                                                    ? (claim.value.customFields as { title?: string } | undefined)?.title || 'Custom event'
+                                                                    : claim.claimType.replace('_', ' ')}
+                                                            </h4>
+                                                            <p className="text-sm text-muted">
+                                                                {claim.place?.displayName || claim.value.description || 'No details yet'}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                className="btn btn-ghost btn-sm"
+                                                                onClick={() => {
+                                                                    setEditingClaim(claim);
+                                                                    setShowAddClaim(true);
+                                                                }}
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                className="btn btn-ghost btn-sm text-error"
+                                                                onClick={() => {
+                                                                    setClaimDeleteError(null);
+                                                                    setPendingClaimDelete(claim._id);
+                                                                }}
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -227,6 +309,7 @@ export function PersonPage() {
                                         className="btn btn-ghost btn-sm"
                                         onClick={() => {
                                             setDefaultClaimType('residence');
+                                            setEditingClaim(null);
                                             setShowAddClaim(true);
                                         }}
                                     >
@@ -240,7 +323,7 @@ export function PersonPage() {
                                 ) : (
                                     <div className="space-y-3">
                                         {residenceClaims.map((claim) => (
-                                            <div key={claim._id} className="flex items-start justify-between">
+                                            <div key={claim._id} className="flex items-start justify-between gap-4">
                                                 <div>
                                                     <div className="font-medium">
                                                         {claim.place?.displayName}
@@ -249,7 +332,26 @@ export function PersonPage() {
                                                         {claim.value.date || 'Unknown date'}
                                                     </div>
                                                 </div>
-                                                <span className="text-xs text-muted">Residence</span>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        className="btn btn-ghost btn-sm"
+                                                        onClick={() => {
+                                                            setEditingClaim(claim);
+                                                            setShowAddClaim(true);
+                                                        }}
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-ghost btn-sm text-error"
+                                                        onClick={() => {
+                                                            setClaimDeleteError(null);
+                                                            setPendingClaimDelete(claim._id);
+                                                        }}
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -307,6 +409,102 @@ export function PersonPage() {
                     </div>
                 )}
 
+                {activeTab === 'places' && (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-semibold">Places & Events</h3>
+                            <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => {
+                                    setDefaultClaimType('residence');
+                                    setEditingClaim(null);
+                                    setShowAddClaim(true);
+                                }}
+                            >
+                                + Add Place/Event
+                            </button>
+                        </div>
+
+                        {placeGroups.length === 0 ? (
+                            <div className="card p-6 text-center text-muted">
+                                No places recorded yet. Add a life event with a place to populate this view.
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                                <div className="card p-0 overflow-hidden lg:col-span-2">
+                                    <div className="p-4 border-b border-border-subtle">
+                                        <h4 className="font-semibold">Map View</h4>
+                                        <p className="text-xs text-muted">Pins show places with coordinates.</p>
+                                    </div>
+                                    <div style={{ height: '420px' }}>
+                                        <MapContainer center={mapCenter} zoom={mapPlaces.length ? 4 : 2} style={{ height: '100%', width: '100%' }}>
+                                            <TileLayer
+                                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                                attribution="&copy; OpenStreetMap contributors"
+                                            />
+                                            {mapPlaces.map((place) => (
+                                                <Marker
+                                                    key={place._id}
+                                                    position={[place.latitude as number, place.longitude as number]}
+                                                    icon={defaultLeafletIcon}
+                                                >
+                                                    <Popup>
+                                                        <div className="space-y-1">
+                                                            <div className="font-semibold">{place.displayName}</div>
+                                                            <div className="text-xs text-muted">
+                                                                {[place.city, place.state, place.country].filter(Boolean).join(', ') || 'No address details'}
+                                                            </div>
+                                                        </div>
+                                                    </Popup>
+                                                </Marker>
+                                            ))}
+                                        </MapContainer>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    {placeGroups.map((group) => (
+                                        <div key={group.place?._id} className="card p-4 space-y-3">
+                                            <div>
+                                                <h4 className="font-semibold">{group.place?.displayName}</h4>
+                                                <p className="text-sm text-muted">
+                                                    {[group.place?.city, group.place?.state, group.place?.country]
+                                                        .filter(Boolean)
+                                                        .join(', ') || 'No address details'}
+                                                </p>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {group.claims.map((claim) => (
+                                                    <div key={claim._id} className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <div className="text-sm font-medium capitalize">
+                                                                {claim.claimType === 'custom'
+                                                                    ? (claim.value.customFields as { title?: string } | undefined)?.title || 'Custom event'
+                                                                    : claim.claimType.replace('_', ' ')}
+                                                            </div>
+                                                            <div className="text-xs text-muted">
+                                                                {claim.value.date || 'Unknown date'}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            className="btn btn-ghost btn-sm"
+                                                            onClick={() => {
+                                                                setEditingClaim(claim);
+                                                                setShowAddClaim(true);
+                                                            }}
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {showAddRel && (
                     <AddRelationshipModal
                         treeId={treeId as Id<"trees">}
@@ -331,7 +529,11 @@ export function PersonPage() {
                         subjectId={personId as string}
                         subjectType="person"
                         defaultClaimType={defaultClaimType}
-                        onClose={() => setShowAddClaim(false)}
+                        initialClaim={editingClaim}
+                        onClose={() => {
+                            setShowAddClaim(false);
+                            setEditingClaim(null);
+                        }}
                     />
                 )}
             </div>
@@ -356,6 +558,33 @@ export function PersonPage() {
                     isBusy={isDeletingPerson}
                     onClose={handleClosePersonDelete}
                     onConfirm={handleConfirmDeletePerson}
+                />
+            )}
+            {pendingClaimDelete && (
+                <ConfirmModal
+                    title="Delete Event"
+                    description="This will permanently remove this life event from the record. This action cannot be undone."
+                    confirmLabel="Delete Event"
+                    busyLabel="Deleting..."
+                    isBusy={isDeletingClaim}
+                    errorMessage={claimDeleteError}
+                    onClose={() => {
+                        setPendingClaimDelete(null);
+                        setClaimDeleteError(null);
+                    }}
+                    onConfirm={async () => {
+                        if (!pendingClaimDelete) return;
+                        setIsDeletingClaim(true);
+                        try {
+                            await removeClaim({ claimId: pendingClaimDelete });
+                            setPendingClaimDelete(null);
+                        } catch (error) {
+                            console.error('Failed to delete claim:', error);
+                            setClaimDeleteError('Unable to delete this event. Please try again.');
+                        } finally {
+                            setIsDeletingClaim(false);
+                        }
+                    }}
                 />
             )}
         </div>

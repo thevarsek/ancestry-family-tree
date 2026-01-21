@@ -29,12 +29,15 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
     const navigate = useNavigate();
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [isPanning, setIsPanning] = useState(false);
+    const [scale, setScale] = useState(1);
     const panState = useRef({
         startX: 0,
         startY: 0,
         scrollLeft: 0,
         scrollTop: 0,
-        moved: false
+        moved: false,
+        lastPanAt: 0,
+        targetPersonId: null as Id<"people"> | null
     });
 
     // Layout constants
@@ -202,7 +205,53 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
             });
         };
 
-        for (let i = 0; i < 2; i += 1) {
+        const clusterGeneration = (generation: number) => {
+            const group = nodesByGeneration.get(generation);
+            if (!group || group.length < 2) return;
+            const ordered = [...group].sort(
+                (a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0)
+            );
+            const visited = new Set<Id<"people">>();
+            const clustered: ChartNode[] = [];
+
+            ordered.forEach((node) => {
+                if (visited.has(node.id)) return;
+                const clusterIds = new Set<Id<"people">>();
+                clusterIds.add(node.id);
+
+                const spouses = spousesByPerson.get(node.id) ?? [];
+                spouses.forEach((spouseId) => {
+                    if (generationById.get(spouseId) === generation) {
+                        clusterIds.add(spouseId);
+                    }
+                });
+
+                const siblings = siblingsByPerson.get(node.id) ?? [];
+                siblings.forEach((siblingId) => {
+                    if (generationById.get(siblingId) === generation) {
+                        clusterIds.add(siblingId);
+                    }
+                });
+
+                const cluster = ordered.filter((candidate) => clusterIds.has(candidate.id));
+                cluster.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+                cluster.forEach((member) => {
+                    visited.add(member.id);
+                    clustered.push(member);
+                });
+            });
+
+            nodesByGeneration.set(generation, clustered);
+            clustered.forEach((node, index) => {
+                orderById.set(node.id, index);
+            });
+        };
+
+        // Run more iterations for better convergence to minimize crossings
+        // Interleave clustering to ensure spouses stay together during optimization
+        // Run iterations to minimize crossings
+        // We run clustering only at the end to ensure families stay together
+        for (let i = 0; i < 4; i += 1) {
             generationKeys.forEach((generation) => {
                 sortGeneration(generation, generation - 1);
             });
@@ -210,6 +259,12 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 sortGeneration(generation, generation + 1);
             });
         }
+
+
+
+        generationKeys.forEach((generation) => {
+            clusterGeneration(generation);
+        });
 
         const nodes: ChartNode[] = [];
         generationKeys.forEach((generation) => {
@@ -231,13 +286,9 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
 
             if (relationship.type === 'parent_child') {
                 links.push({ from, to, type: 'parent' });
-            }
-
-            if (relationship.type === 'spouse' || relationship.type === 'partner') {
+            } else if (relationship.type === 'spouse' || relationship.type === 'partner') {
                 links.push({ from, to, type: 'spouse' });
-            }
-
-            if (relationship.type === 'sibling') {
+            } else if (relationship.type === 'sibling') {
                 links.push({ from, to, type: 'sibling' });
             }
         });
@@ -250,7 +301,7 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
         const maxX = Math.max(...nodes.map(node => node.x + NODE_WIDTH));
         const minY = Math.min(...nodes.map(node => node.y));
         const maxY = Math.max(...nodes.map(node => node.y + NODE_HEIGHT));
-        const padding = 120;
+        const padding = 200; // Increased padding to prevent cutoff
         const offsetX = padding - minX;
         const offsetY = padding - minY;
 
@@ -289,13 +340,27 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
         const container = containerRef.current;
         if (!container) return;
+
+        // Find if we clicked a node
+        let target = event.target as HTMLElement;
+        let personId: string | null = null;
+        while (target && target !== container) {
+            if (target.getAttribute('data-person-id')) {
+                personId = target.getAttribute('data-person-id');
+                break;
+            }
+            target = target.parentElement as HTMLElement;
+        }
+
         container.setPointerCapture(event.pointerId);
         panState.current = {
             startX: event.clientX,
             startY: event.clientY,
             scrollLeft: container.scrollLeft,
             scrollTop: container.scrollTop,
-            moved: false
+            moved: false,
+            lastPanAt: panState.current.lastPanAt,
+            targetPersonId: personId as Id<"people"> | null
         };
         setIsPanning(true);
     };
@@ -317,14 +382,66 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
         if (!container) return;
         container.releasePointerCapture(event.pointerId);
         setIsPanning(false);
+
+        if (!panState.current.moved && panState.current.targetPersonId) {
+            handleNodeClick(panState.current.targetPersonId);
+        }
+
+        if (panState.current.moved) {
+            panState.current.lastPanAt = Date.now();
+            panState.current.moved = false;
+        }
     };
 
     const handleNodeClick = (personId: Id<"people">) => {
-        if (panState.current.moved) {
-            panState.current.moved = false;
+        if (Date.now() - panState.current.lastPanAt < 200) {
             return;
         }
         navigate(`/tree/${treeId}/person/${personId}`);
+    };
+
+    const clampScale = (nextScale: number) => Math.min(2.5, Math.max(0.5, nextScale));
+
+    const applyScale = (nextScale: number) => {
+        const container = containerRef.current;
+        if (!container) return;
+        const prevScale = scale;
+        const centerX = container.scrollLeft + container.clientWidth / 2;
+        const centerY = container.scrollTop + container.clientHeight / 2;
+        const ratio = nextScale / prevScale;
+        setScale(nextScale);
+        requestAnimationFrame(() => {
+            container.scrollLeft = centerX * ratio - container.clientWidth / 2;
+            container.scrollTop = centerY * ratio - container.clientHeight / 2;
+        });
+    };
+
+    const handleZoomIn = () => applyScale(clampScale(scale + 0.15));
+    const handleZoomOut = () => applyScale(clampScale(scale - 0.15));
+
+    const handleFit = () => {
+        const container = containerRef.current;
+        if (!container) return;
+        const padding = 80;
+        const availableWidth = Math.max(container.clientWidth - padding, 1);
+        const availableHeight = Math.max(container.clientHeight - padding, 1);
+        const nextScale = clampScale(Math.min(availableWidth / chartData.width, availableHeight / chartData.height));
+        setScale(nextScale);
+        requestAnimationFrame(() => {
+            container.scrollLeft = (chartData.width * nextScale - container.clientWidth) / 2;
+            container.scrollTop = (chartData.height * nextScale - container.clientHeight) / 2;
+        });
+    };
+
+    const handleCenter = () => {
+        const container = containerRef.current;
+        if (!container) return;
+        const rootNode = chartData.nodes.find((node) => node.id === rootPersonId);
+        if (!rootNode) return;
+        const targetX = (rootNode.x + NODE_WIDTH / 2) * scale;
+        const targetY = (rootNode.y + NODE_HEIGHT / 2) * scale;
+        container.scrollLeft = targetX - container.clientWidth / 2;
+        container.scrollTop = targetY - container.clientHeight / 2;
     };
 
     return (
@@ -337,82 +454,147 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
             onPointerUp={handlePointerUp}
             onPointerLeave={() => setIsPanning(false)}
         >
-            <svg width={chartData.width} height={chartData.height}>
-                <defs>
-                    <marker
-                        id="arrowhead"
-                        markerWidth="10"
-                        markerHeight="7"
-                        refX="0"
-                        refY="3.5"
-                        orient="auto"
-                    >
-                        <polygon points="0 0, 10 3.5, 0 7" fill="var(--color-border)" />
-                    </marker>
-                </defs>
-
-                {/* Draw Links */}
-                {chartData.links.map((link, i) => {
-                    const fromX = link.type === 'parent' ? link.from.x + NODE_WIDTH : link.from.x + NODE_WIDTH / 2;
-                    const toX = link.type === 'parent' ? link.to.x : link.to.x + NODE_WIDTH / 2;
-                    const fromY = link.from.y + NODE_HEIGHT / 2;
-                    const toY = link.to.y + NODE_HEIGHT / 2;
-                    const midX = (fromX + toX) / 2;
-                    const path = link.type === 'parent'
-                        ? `M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`
-                        : `M ${fromX} ${fromY} L ${toX} ${toY}`;
-
-                    return (
-                        <path
-                            key={`link-${i}`}
-                            d={path}
-                            stroke={link.type === 'parent' ? 'var(--color-border)' : 'var(--color-border-subtle)'}
-                            strokeWidth={link.type === 'parent' ? 2 : 1.5}
-                            fill="none"
-                            strokeDasharray={link.type === 'sibling' ? '4 4' : undefined}
-                        />
-                    );
-                })}
-
-                {/* Draw Nodes */}
-                {chartData.nodes.map((node) => (
-                    <g
-                        key={node.id}
-                        transform={`translate(${node.x}, ${node.y})`}
-                        className="cursor-pointer transition-transform"
-                        onClick={() => handleNodeClick(node.id)}
-                    >
-                        <rect
-                            width={NODE_WIDTH}
-                            height={NODE_HEIGHT}
-                            rx="12"
-                            ry="12"
-                            fill="var(--color-surface)"
-                            stroke={node.id === rootPersonId ? "var(--color-accent)" : "var(--color-border)"}
-                            strokeWidth={node.id === rootPersonId ? "3" : "1"}
-                            className="shadow-sm"
-                        />
-                        <text
-                            x={NODE_WIDTH / 2}
-                            y={35}
-                            textAnchor="middle"
-                            className="font-bold text-sm"
-                            fill="var(--color-text-primary)"
+            <div
+                className="flex items-center justify-between mb-3 text-xs text-muted"
+                onPointerDown={(event) => event.stopPropagation()}
+                onPointerMove={(event) => event.stopPropagation()}
+            >
+                <span>Drag to pan · Scrollbars for precise moves</span>
+                <div className="flex items-center gap-2">
+                    <button className="btn btn-ghost btn-sm" onClick={handleZoomOut}>-</button>
+                    <span style={{ minWidth: '3rem', textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
+                    <button className="btn btn-ghost btn-sm" onClick={handleZoomIn}>+</button>
+                    <button className="btn btn-secondary btn-sm" onClick={handleFit}>Fit</button>
+                    <button className="btn btn-secondary btn-sm" onClick={handleCenter}>Center</button>
+                </div>
+            </div>
+            <div style={{ width: chartData.width * scale, height: chartData.height * scale, display: 'inline-block' }}>
+                <svg width={chartData.width} height={chartData.height} style={{ transform: `scale(${scale})`, transformOrigin: 'top left', overflow: 'visible' }}>
+                    <defs>
+                        <marker
+                            id="arrowhead"
+                            markerWidth="10"
+                            markerHeight="7"
+                            refX="0"
+                            refY="3.5"
+                            orient="auto"
                         >
-                            {node.person.givenNames} {node.person.surnames}
-                        </text>
-                        <text
-                            x={NODE_WIDTH / 2}
-                            y={55}
-                            textAnchor="middle"
-                            className="text-xs"
-                            fill="var(--color-text-muted)"
+                            <polygon points="0 0, 10 3.5, 0 7" fill="var(--color-border)" />
+                        </marker>
+                    </defs>
+
+                    {/* Draw Links - Other Types (Spouse/Sibling) */}
+                    {chartData.links.filter(l => l.type !== 'parent').map((link, i) => {
+                        const fromX = link.from.x + NODE_WIDTH / 2;
+                        const fromY = link.from.y + NODE_HEIGHT / 2;
+                        const toX = link.to.x + NODE_WIDTH / 2;
+                        const toY = link.to.y + NODE_HEIGHT / 2;
+
+                        // Vertical-ish curve for same-generation relationships (spouse/sibling)
+                        const midY = (fromY + toY) / 2;
+                        // Larger curve offset to go around nodes instead of through them
+                        const curveOffset = link.type === 'spouse' ? 160 : -160;
+                        const path = `M ${fromX} ${fromY} C ${fromX + curveOffset} ${midY}, ${toX + curveOffset} ${midY}, ${toX} ${toY}`;
+
+                        return (
+                            <path
+                                key={`other-link-${i}`}
+                                d={path}
+                                stroke={link.type === 'spouse' ? "var(--color-accent)" : "var(--color-text-muted)"}
+                                strokeWidth={2}
+                                strokeDasharray={link.type === 'sibling' ? "4 2" : "0"}
+                                fill="none"
+                                opacity={0.8}
+                            />
+                        );
+                    })}
+
+                    {/* Draw Links - Grouped by Child to merge parent lines */}
+                    {Object.entries(
+                        chartData.links.filter(l => l.type === 'parent').reduce((acc, link) => {
+                            const childId = link.to.id;
+                            if (!acc[childId]) acc[childId] = [];
+                            acc[childId].push(link);
+                            return acc;
+                        }, {} as Record<string, ChartLink[]>)
+                    ).map(([childId, childLinks]) => {
+                        const toX = childLinks[0].to.x;
+                        const toY = childLinks[0].to.y + NODE_HEIGHT / 2;
+
+                        // Junction point where lines meet
+                        const junctionX = toX - HORIZONTAL_GAP / 2;
+
+                        return (
+                            <g key={`links-to-${childId}`}>
+                                {childLinks.map((link, i) => {
+                                    const fromX = link.from.x + NODE_WIDTH;
+                                    const fromY = link.from.y + NODE_HEIGHT / 2;
+
+                                    // Line from parent to junction
+                                    // Smooth bezier curve
+                                    const path = `M ${fromX} ${fromY} C ${fromX + 40} ${fromY}, ${junctionX - 40} ${toY}, ${junctionX} ${toY}`;
+
+                                    return (
+                                        <path
+                                            key={`link-${i}`}
+                                            d={path}
+                                            stroke="var(--color-border)"
+                                            strokeWidth={2}
+                                            fill="none"
+                                        />
+                                    );
+                                })}
+                                {/* Single horizontal line from junction to child */}
+                                <path
+                                    d={`M ${junctionX} ${toY} L ${toX} ${toY}`}
+                                    stroke="var(--color-border)"
+                                    strokeWidth={2}
+                                    fill="none"
+                                />
+                            </g>
+                        );
+                    })}
+
+                    {/* Draw Nodes */}
+                    {chartData.nodes.map((node) => (
+                        <g
+                            key={node.id}
+                            transform={`translate(${node.x}, ${node.y})`}
+                            className="cursor-pointer transition-transform"
+                            data-person-id={node.id}
                         >
-                            {node.person.isLiving ? 'Living' : 'Deceased'}
-                        </text>
-                    </g>
-                ))}
-            </svg>
+                            <rect
+                                width={NODE_WIDTH}
+                                height={NODE_HEIGHT}
+                                rx="12"
+                                ry="12"
+                                fill="var(--color-surface)"
+                                stroke={node.id === rootPersonId ? "var(--color-accent)" : "var(--color-border)"}
+                                strokeWidth={node.id === rootPersonId ? "3" : "1"}
+                                className="shadow-sm"
+                            />
+                            <text
+                                x={NODE_WIDTH / 2}
+                                y={35}
+                                textAnchor="middle"
+                                className="font-bold text-sm"
+                                fill="var(--color-text-primary)"
+                            >
+                                {node.person.givenNames} {node.person.surnames}
+                            </text>
+                            <text
+                                x={NODE_WIDTH / 2}
+                                y={55}
+                                textAnchor="middle"
+                                className="text-xs"
+                                fill="var(--color-text-muted)"
+                            >
+                                {node.person.isLiving ? 'Living' : 'Deceased'}
+                            </text>
+                        </g>
+                    ))}
+                </svg>
+            </div>
         </div>
     );
 }

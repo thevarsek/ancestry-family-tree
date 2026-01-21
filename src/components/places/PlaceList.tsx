@@ -1,144 +1,46 @@
-import { useState } from 'react';
-import { useQuery, useMutation } from 'convex/react';
+import { useMemo, useState } from 'react';
+import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
-
-export function CreatePlaceModal({
-    treeId,
-    onClose,
-    onSuccess
-}: {
-    treeId: Id<"trees">;
-    onClose: () => void;
-    onSuccess?: (placeId: Id<"places">) => void;
-}) {
-    const [formData, setFormData] = useState({
-        displayName: '',
-        city: '',
-        state: '',
-        country: '',
-        historicalNote: '',
-    });
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const createPlace = useMutation(api.places.create);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!formData.displayName) return;
-
-        setIsSubmitting(true);
-        try {
-            const placeId = await createPlace({
-                treeId,
-                displayName: formData.displayName,
-                city: formData.city || undefined,
-                state: formData.state || undefined,
-                country: formData.country || undefined,
-                historicalNote: formData.historicalNote || undefined,
-                geocodeMethod: 'manual',
-                geocodePrecision: 'approximate',
-            });
-            if (onSuccess) onSuccess(placeId);
-            onClose();
-        } catch (error) {
-            console.error("Failed to create place:", error);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    return (
-        <>
-            <div className="modal-backdrop" onClick={onClose} />
-            <div className="modal">
-                <div className="modal-header">
-                    <h3 className="modal-title">Add New Place</h3>
-                    <button className="btn btn-ghost btn-icon" onClick={onClose}>×</button>
-                </div>
-                <form onSubmit={handleSubmit}>
-                    <div className="modal-body space-y-4">
-                        <div className="input-group">
-                            <label className="input-label">Display Name</label>
-                            <input
-                                className="input"
-                                value={formData.displayName}
-                                onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
-                                placeholder="e.g. Smith Family Homestead or Boston"
-                                autoFocus
-                            />
-                            <p className="text-xs text-muted mt-1">This is how the place will appear in timelines.</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="input-group">
-                                <label className="input-label">City/Town</label>
-                                <input
-                                    className="input"
-                                    value={formData.city}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
-                                    placeholder="e.g. Springfield"
-                                />
-                            </div>
-                            <div className="input-group">
-                                <label className="input-label">State/Province</label>
-                                <input
-                                    className="input"
-                                    value={formData.state}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
-                                    placeholder="e.g. IL"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="input-group">
-                            <label className="input-label">Country</label>
-                            <input
-                                className="input"
-                                value={formData.country}
-                                onChange={(e) => setFormData(prev => ({ ...prev, country: e.target.value }))}
-                                placeholder="e.g. USA"
-                            />
-                        </div>
-
-                        <div className="input-group">
-                            <label className="input-label">Historical Note</label>
-                            <textarea
-                                className="input"
-                                value={formData.historicalNote}
-                                onChange={(e) => setFormData(prev => ({ ...prev, historicalNote: e.target.value }))}
-                                placeholder="Any historical context about this location..."
-                                rows={3}
-                            />
-                        </div>
-                    </div>
-                    <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="btn btn-primary"
-                            disabled={!formData.displayName || isSubmitting}
-                        >
-                            {isSubmitting ? 'Adding...' : 'Add Place'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </>
-    );
-}
+import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import { PlaceModal } from './PlaceModal';
+import { defaultLeafletIcon } from './leafletIcon';
 
 export function PlaceList({ treeId }: { treeId: Id<"trees"> }) {
     const places = useQuery(api.places.list, { treeId, limit: 100 });
+    const [selectedPlaceId, setSelectedPlaceId] = useState<Id<"places"> | null>(null);
     const [showCreate, setShowCreate] = useState(false);
+    const [editingPlace, setEditingPlace] = useState<Doc<'places'> | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const selectedPlaceClaims = useQuery(
+        api.places.getClaims,
+        selectedPlaceId ? { placeId: selectedPlaceId } : 'skip'
+    );
 
     // Client-side filtering
     const filteredPlaces = places?.filter(p => {
         const text = `${p.displayName} ${p.city || ''} ${p.state || ''}`.toLowerCase();
         return text.includes(searchQuery.toLowerCase());
     });
+
+    const mapPlaces = useMemo(
+        () => (places ?? []).filter((place) => place.latitude && place.longitude),
+        [places]
+    );
+
+    const mapCenter = useMemo(() => {
+        if (mapPlaces.length === 0) return [20, 0] as [number, number];
+        const sum = mapPlaces.reduce(
+            (acc, place) => {
+                acc.lat += place.latitude ?? 0;
+                acc.lng += place.longitude ?? 0;
+                return acc;
+            },
+            { lat: 0, lng: 0 }
+        );
+        return [sum.lat / mapPlaces.length, sum.lng / mapPlaces.length] as [number, number];
+    }, [mapPlaces]);
 
     if (places === undefined) {
         return <div className="spinner spinner-lg mx-auto mt-8" />;
@@ -153,7 +55,10 @@ export function PlaceList({ treeId }: { treeId: Id<"trees"> }) {
                 </div>
                 <button
                     className="btn btn-primary btn-sm"
-                    onClick={() => setShowCreate(true)}
+                    onClick={() => {
+                        setEditingPlace(null);
+                        setShowCreate(true);
+                    }}
                 >
                     + Add Place
                 </button>
@@ -168,9 +73,81 @@ export function PlaceList({ treeId }: { treeId: Id<"trees"> }) {
                 />
             </div>
 
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="card p-0 overflow-hidden lg:col-span-2">
+                    <div className="p-4 border-b border-border-subtle">
+                        <h3 className="font-semibold">Map View</h3>
+                        <p className="text-xs text-muted">Pins show places with coordinates.</p>
+                    </div>
+                    <div style={{ height: '420px' }}>
+                        <MapContainer center={mapCenter} zoom={mapPlaces.length ? 4 : 2} style={{ height: '100%', width: '100%' }}>
+                            <TileLayer
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                attribution="&copy; OpenStreetMap contributors"
+                            />
+                            {mapPlaces.map((place) => (
+                                <Marker
+                                    key={place._id}
+                                    position={[place.latitude as number, place.longitude as number]}
+                                    icon={defaultLeafletIcon}
+                                    eventHandlers={{
+                                        click: () => setSelectedPlaceId(place._id),
+                                    }}
+                                >
+                                    <Popup>
+                                        <div className="space-y-1">
+                                            <div className="font-semibold">{place.displayName}</div>
+                                            <div className="text-xs text-muted">
+                                                {[place.city, place.state, place.country].filter(Boolean).join(', ') || 'No address details'}
+                                            </div>
+                                            <button
+                                                className="btn btn-secondary btn-sm mt-2"
+                                                onClick={() => setSelectedPlaceId(place._id)}
+                                            >
+                                                View Events
+                                            </button>
+                                        </div>
+                                    </Popup>
+                                </Marker>
+                            ))}
+                        </MapContainer>
+                    </div>
+                </div>
+                <div className="card p-4">
+                    <h3 className="font-semibold mb-2">Events at Place</h3>
+                    {selectedPlaceId ? (
+                        selectedPlaceClaims ? (
+                            selectedPlaceClaims.length > 0 ? (
+                                <div className="space-y-3">
+                                    {selectedPlaceClaims.map((claim) => (
+                                        <div key={claim._id} className="border-b border-border-subtle pb-2">
+                                            <div className="text-sm font-medium capitalize">
+                                                {claim.claimType === 'custom'
+                                                    ? (claim.value.customFields as { title?: string } | undefined)?.title || 'Custom event'
+                                                    : claim.claimType.replace('_', ' ')}
+                                            </div>
+                                            <div className="text-xs text-muted">
+                                                {claim.value.date || 'Unknown date'}
+                                                {claim.person ? ` · ${claim.person.givenNames} ${claim.person.surnames}` : ''}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted">No events recorded for this place yet.</p>
+                            )
+                        ) : (
+                            <div className="spinner" />
+                        )
+                    ) : (
+                        <p className="text-sm text-muted">Select a pin to see events.</p>
+                    )}
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {filteredPlaces?.map((place) => (
-                    <div key={place._id} className="card card-interactive cursor-pointer p-4">
+                    <div key={place._id} className="card card-interactive cursor-pointer p-4" onClick={() => setSelectedPlaceId(place._id)}>
                         <div className="flex items-start gap-3">
                             <div className="text-2xl mt-1">📍</div>
                             <div>
@@ -178,10 +155,25 @@ export function PlaceList({ treeId }: { treeId: Id<"trees"> }) {
                                 <p className="text-sm text-muted">
                                     {[place.city, place.state, place.country].filter(Boolean).join(', ') || 'No address details'}
                                 </p>
+                                <button
+                                    className="btn btn-ghost btn-sm mt-2"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setEditingPlace(place);
+                                        setShowCreate(true);
+                                    }}
+                                >
+                                    Edit
+                                </button>
                                 {place.historicalNote && (
                                     <p className="text-xs text-muted mt-2 border-t border-border-subtle pt-2">
                                         &quot;{place.historicalNote}&quot;
                                     </p>
+                                )}
+                                {place.latitude && place.longitude ? (
+                                    <p className="text-xs text-muted mt-2">Pinned on map</p>
+                                ) : (
+                                    <p className="text-xs text-muted mt-2">Add coordinates to show on map</p>
                                 )}
                             </div>
                         </div>
@@ -196,9 +188,16 @@ export function PlaceList({ treeId }: { treeId: Id<"trees"> }) {
             </div>
 
             {showCreate && (
-                <CreatePlaceModal
+                <PlaceModal
                     treeId={treeId}
-                    onClose={() => setShowCreate(false)}
+                    initialPlace={editingPlace}
+                    onClose={() => {
+                        setShowCreate(false);
+                        setEditingPlace(null);
+                    }}
+                    onSuccess={(placeId) => {
+                        setSelectedPlaceId(placeId);
+                    }}
                 />
             )}
         </div>

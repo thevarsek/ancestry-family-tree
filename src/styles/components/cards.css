@@ -34,3 +34,7 @@
     color: var(--color-text-muted);
     margin-top: var(--space-1);
 }
+
+.leaflet-container {
+    z-index: 0;
+}

@@ -10,9 +10,11 @@ This document outlines the operational standards and coding best practices for A
   - Component tests where applicable.
 - **Verify Before Submitting**: Always run the relevant test suite to ensure no regressions were introduced.
 - **Project Commands**:
-  - `npm run lint`
-  - `npm run typecheck`
-  - `npm run dev:all`
+- `npm run lint`
+- `npm run typecheck`
+- `npm run test`
+- `npm run test:watch`
+- `npm run dev:all`
   - If no test runner exists yet, add one alongside the first test suite and document it here.
 
 ## 2. Code Quality & Safety
