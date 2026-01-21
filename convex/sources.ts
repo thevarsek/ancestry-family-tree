@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireTreeAccess, requireTreeAdmin } from "./lib/auth";
 import { Id } from "./_generated/dataModel";
@@ -6,7 +6,7 @@ import { Id } from "./_generated/dataModel";
 // List sources for a tree
 export const list = query({
     args: { treeId: v.id("trees"), limit: v.optional(v.number()) },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         await requireTreeAccess(ctx, args.treeId);
 
         const sources = await ctx.db
@@ -22,7 +22,7 @@ export const list = query({
 // List sources linked to a person
 export const listByPerson = query({
     args: { personId: v.id("people") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         const person = await ctx.db.get(args.personId);
         if (!person) return [];
 
@@ -71,7 +71,7 @@ export const create = mutation({
         notes: v.optional(v.string()),
         claimId: v.optional(v.id("claims")),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const { userId } = await requireTreeAdmin(ctx, args.treeId);
         const now = Date.now();
 

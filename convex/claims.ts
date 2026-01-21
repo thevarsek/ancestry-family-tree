@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireTreeAccess, requireTreeAdmin } from "./lib/auth";
 
@@ -51,7 +51,7 @@ export const listBySubject = query({
         ),
         subjectId: v.string(),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         const claims = await ctx.db
             .query("claims")
             .withIndex("by_subject", (q) =>
@@ -73,7 +73,7 @@ export const listBySubject = query({
  */
 export const get = query({
     args: { claimId: v.id("claims") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         const claim = await ctx.db.get(args.claimId);
         if (!claim) return null;
 
@@ -139,7 +139,7 @@ export const create = mutation({
         ),
         relatedPersonIds: v.optional(v.array(v.id("people"))),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const { userId } = await requireTreeAdmin(ctx, args.treeId);
         const now = Date.now();
 
@@ -253,7 +253,7 @@ export const update = mutation({
         claimType: claimTypeValidator,
         value: claimValueValidator,
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const claim = await ctx.db.get(args.claimId);
         if (!claim) throw new Error("Claim not found");
 
@@ -321,7 +321,7 @@ export const update = mutation({
  */
 export const remove = mutation({
     args: { claimId: v.id("claims") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const claim = await ctx.db.get(args.claimId);
         if (!claim) throw new Error("Claim not found");
 
@@ -378,7 +378,7 @@ export const updateStatus = mutation({
         ),
         resolutionNote: v.optional(v.string()),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const claim = await ctx.db.get(args.claimId);
         if (!claim) throw new Error("Claim not found");
 
@@ -416,7 +416,7 @@ export const dispute = mutation({
         alternativeValue: v.any(),
         reason: v.string(),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const claim = await ctx.db.get(args.claimId);
         if (!claim) throw new Error("Claim not found");
 
@@ -463,7 +463,7 @@ export const resolveDispute = mutation({
         note: v.optional(v.string()),
         applyAlternativeValue: v.optional(v.boolean()),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const dispute = await ctx.db.get(args.disputeId);
         if (!dispute) throw new Error("Dispute not found");
 
@@ -529,7 +529,7 @@ export const addCitation = mutation({
         citationId: v.id("citations"),
         isPrimary: v.optional(v.boolean()),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const claim = await ctx.db.get(args.claimId);
         if (!claim) throw new Error("Claim not found");
 
@@ -565,7 +565,7 @@ export const addSource = mutation({
         claimId: v.id("claims"),
         sourceId: v.id("sources"),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const claim = await ctx.db.get(args.claimId);
         if (!claim) throw new Error("Claim not found");
 
@@ -617,7 +617,7 @@ export const removeSource = mutation({
         claimId: v.id("claims"),
         sourceId: v.id("sources"),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const claim = await ctx.db.get(args.claimId);
         if (!claim) throw new Error("Claim not found");
 

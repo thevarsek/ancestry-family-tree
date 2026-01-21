@@ -1,7 +1,6 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireUser, getCurrentUser } from "./lib/auth";
-import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
 export const acceptPendingInvitations = async (
@@ -60,7 +59,7 @@ export const acceptPendingInvitations = async (
  */
 export const getOrCreate = mutation({
     args: {},
-    handler: async (ctx) => {
+    handler: async (ctx: MutationCtx) => {
         const identity = await ctx.auth.getUserIdentity();
         if (!identity) {
             return null;
@@ -112,7 +111,7 @@ export const getOrCreate = mutation({
  */
 export const me = query({
     args: {},
-    handler: async (ctx) => {
+    handler: async (ctx: QueryCtx) => {
         return await getCurrentUser(ctx);
     },
 });
@@ -125,7 +124,7 @@ export const updateProfile = mutation({
         name: v.optional(v.string()),
         avatarUrl: v.optional(v.string()),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const user = await requireUser(ctx);
 
         const updates: Record<string, string> = {};

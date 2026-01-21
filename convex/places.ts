@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { requireTreeAccess, requireTreeAdmin } from "./lib/auth";
 
 /**
@@ -11,7 +11,7 @@ export const list = query({
         treeId: v.id("trees"),
         limit: v.optional(v.number()),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         await requireTreeAccess(ctx, args.treeId);
 
         const places = await ctx.db
@@ -28,7 +28,7 @@ export const list = query({
  */
 export const get = query({
     args: { placeId: v.id("places") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         const place = await ctx.db.get(args.placeId);
         if (!place) return null;
 
@@ -45,7 +45,7 @@ export const search = query({
         treeId: v.id("trees"),
         query: v.string(),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         await requireTreeAccess(ctx, args.treeId);
 
         if (!args.query.trim()) {
@@ -98,7 +98,7 @@ export const create = mutation({
         historicalNote: v.optional(v.string()),
         existsToday: v.optional(v.boolean()),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const { userId } = await requireTreeAdmin(ctx, args.treeId);
         const now = Date.now();
 
@@ -170,7 +170,7 @@ export const update = mutation({
         historicalNote: v.optional(v.string()),
         existsToday: v.optional(v.boolean()),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const place = await ctx.db.get(args.placeId);
         if (!place) throw new Error("Place not found");
 
@@ -226,7 +226,7 @@ export const update = mutation({
  */
 export const getClaims = query({
     args: { placeId: v.id("places") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         const place = await ctx.db.get(args.placeId);
         if (!place) return null;
 

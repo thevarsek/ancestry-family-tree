@@ -1,4 +1,4 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireTreeAccess, requireTreeAdmin } from "./lib/auth";
 import { Id } from "./_generated/dataModel";
@@ -11,7 +11,7 @@ export const list = query({
         treeId: v.id("trees"),
         limit: v.optional(v.number()),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         await requireTreeAccess(ctx, args.treeId);
 
         const people = await ctx.db
@@ -28,7 +28,7 @@ export const list = query({
  */
 export const get = query({
     args: { personId: v.id("people") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         const person = await ctx.db.get(args.personId);
         if (!person) return null;
 
@@ -42,7 +42,7 @@ export const get = query({
  */
 export const getWithClaims = query({
     args: { personId: v.id("people") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         const person = await ctx.db.get(args.personId);
         if (!person) return null;
 
@@ -116,7 +116,7 @@ export const search = query({
         treeId: v.id("trees"),
         query: v.string(),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         await requireTreeAccess(ctx, args.treeId);
 
         if (!args.query.trim()) {
@@ -153,7 +153,7 @@ export const create = mutation({
         ),
         isLiving: v.boolean(),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const { userId } = await requireTreeAdmin(ctx, args.treeId);
         const now = Date.now();
 
@@ -224,7 +224,7 @@ export const update = mutation({
             )
         ),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const person = await ctx.db.get(args.personId);
         if (!person) throw new Error("Person not found");
 
@@ -279,7 +279,7 @@ export const update = mutation({
  */
 export const remove = mutation({
     args: { personId: v.id("people") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const person = await ctx.db.get(args.personId);
         if (!person) throw new Error("Person not found");
 
@@ -345,7 +345,7 @@ export const remove = mutation({
  */
 export const getRelationships = query({
     args: { personId: v.id("people") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         const person = await ctx.db.get(args.personId);
         if (!person) return null;
 
@@ -405,7 +405,7 @@ export const getRelationships = query({
  */
 export const getTreeData = query({
     args: { treeId: v.id("trees") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         await requireTreeAccess(ctx, args.treeId);
 
         const people = await ctx.db

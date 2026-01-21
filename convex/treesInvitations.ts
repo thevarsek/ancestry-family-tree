@@ -1,4 +1,4 @@
-import { action, mutation, query } from "./_generated/server";
+import { action, mutation, query, QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { requireTreeAdmin, requireUser } from "./lib/auth";
@@ -73,7 +73,7 @@ const revokeClerkInvitation = async (invitationId: string) => {
 
 export const ensureAdmin = mutation({
     args: { treeId: v.id("trees") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const { userId } = await requireTreeAdmin(ctx, args.treeId);
         return userId;
     }
@@ -86,7 +86,7 @@ export const createInvitation = mutation({
         role: v.union(v.literal("admin"), v.literal("user")),
         clerkInvitationId: v.optional(v.string())
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const { userId } = await requireTreeAdmin(ctx, args.treeId);
         const now = Date.now();
 
@@ -123,7 +123,7 @@ export const invite = action({
         email: v.string(),
         role: v.union(v.literal("admin"), v.literal("user"))
     },
-    handler: async (ctx, args): Promise<{ invitationId: Id<"invitations">; token: string }> => {
+    handler: async (ctx: ActionCtx, args): Promise<{ invitationId: Id<"invitations">; token: string }> => {
         await ctx.runMutation(api.treesInvitations.ensureAdmin, { treeId: args.treeId });
         const clerkInvitation = await createClerkInvitation(args.email, args.treeId, args.role);
         return await ctx.runMutation(api.treesInvitations.createInvitation, {
@@ -135,7 +135,7 @@ export const invite = action({
 
 export const acceptInvitation = mutation({
     args: { token: v.string() },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const user = await requireUser(ctx);
         const now = Date.now();
 
@@ -192,7 +192,7 @@ export const acceptInvitation = mutation({
 
 export const getInvitations = query({
     args: { treeId: v.id("trees") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         await requireTreeAdmin(ctx, args.treeId);
 
         const invitations = await ctx.db
@@ -210,7 +210,7 @@ export const getInvitationForCancel = query({
         treeId: v.id("trees"),
         invitationId: v.id("invitations")
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: QueryCtx, args) => {
         await requireTreeAdmin(ctx, args.treeId);
         const invitation = await ctx.db.get(args.invitationId);
         if (!invitation || invitation.treeId !== args.treeId) {
@@ -225,7 +225,7 @@ export const deleteInvitation = mutation({
         treeId: v.id("trees"),
         invitationId: v.id("invitations")
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx: MutationCtx, args) => {
         const { userId } = await requireTreeAdmin(ctx, args.treeId);
 
         const invitation = await ctx.db.get(args.invitationId);
@@ -253,7 +253,7 @@ export const cancelInvitation = action({
         treeId: v.id("trees"),
         invitationId: v.id("invitations")
     },
-    handler: async (ctx, args): Promise<Id<"trees">> => {
+    handler: async (ctx: ActionCtx, args): Promise<Id<"trees">> => {
         const invitation = await ctx.runQuery(api.treesInvitations.getInvitationForCancel, {
             treeId: args.treeId,
             invitationId: args.invitationId

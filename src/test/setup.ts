@@ -10,15 +10,15 @@ if (typeof window !== 'undefined' && !('PointerEvent' in window)) {
         }
     }
 
-    window.PointerEvent = PointerEventShim as unknown as typeof PointerEvent;
+    (window as any).PointerEvent = PointerEventShim as unknown as typeof PointerEvent;
 }
 
 if (!Element.prototype.setPointerCapture) {
-    Element.prototype.setPointerCapture = () => {};
+    Element.prototype.setPointerCapture = () => { };
 }
 
 if (!Element.prototype.releasePointerCapture) {
-    Element.prototype.releasePointerCapture = () => {};
+    Element.prototype.releasePointerCapture = () => { };
 }
 
 if (!Element.prototype.hasPointerCapture) {

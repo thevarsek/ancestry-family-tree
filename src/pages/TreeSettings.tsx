@@ -143,7 +143,7 @@ export function TreeSettings() {
     };
 
     const safeMembers = (members ?? []).filter(
-        (member): member is {
+        (member: any): member is {
             userId: Id<"users">;
             name: string;
             email: string;
@@ -169,7 +169,7 @@ export function TreeSettings() {
                         className={`mt-4 text-sm p-3 rounded ${statusMessage.type === 'success'
                             ? 'bg-success-bg text-success'
                             : 'bg-error-bg text-error'
-                        }`}
+                            }`}
                     >
                         {statusMessage.message}
                     </div>

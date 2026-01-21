@@ -23,10 +23,11 @@ export function PersonSourceList({
         return <div className="spinner spinner-lg mx-auto mt-8" />;
     }
 
-    const filteredSources = sources.filter((source: Doc<"sources">) => {
+    const filteredSources = (sources || []).filter((source) => {
+        if (!source) return false;
         const haystack = `${source.title} ${source.author ?? ''}`.toLowerCase();
         return haystack.includes(searchQuery.toLowerCase());
-    });
+    }) as Doc<"sources">[];
 
     return (
         <div className="space-y-6">
@@ -53,7 +54,7 @@ export function PersonSourceList({
             </div>
 
             <div className="grid grid-cols-1 gap-3">
-                {filteredSources.map((source: Doc<"sources">) => (
+                {filteredSources.map((source) => (
                     <div key={source._id} className="card p-4 hover:shadow-md transition-shadow cursor-pointer">
                         <div className="flex justify-between items-start">
                             <div>
