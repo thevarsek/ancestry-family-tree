@@ -189,7 +189,7 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
     const profilePhotos = useQuery(
         api.media.getUrls,
         profilePhotoIds.length ? { mediaIds: profilePhotoIds } : "skip"
-    ) as Array<{ mediaId: Id<"media">; storageUrl?: string | null }> | undefined;
+    ) as Array<{ mediaId: Id<"media">; storageUrl?: string | null; zoomLevel?: number; focusX?: number; focusY?: number }> | undefined;
     const [showCreate, setShowCreate] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -204,12 +204,12 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
     }
 
     const profilePhotoMap = new Map(
-        (profilePhotos ?? []).map((item: { mediaId: Id<"media">; storageUrl?: string | null }) =>
-            [item.mediaId, item.storageUrl ?? undefined]
+        (profilePhotos ?? []).map((item: { mediaId: Id<"media">; storageUrl?: string | null; zoomLevel?: number; focusX?: number; focusY?: number }) =>
+            [item.mediaId, item]
         )
     );
 
-    const getProfilePhotoUrl = (mediaId: Id<"media"> | undefined) => {
+    const getProfilePhoto = (mediaId: Id<"media"> | undefined) => {
         if (!mediaId || !profilePhotos) return undefined;
         return profilePhotoMap.get(mediaId);
     };
@@ -246,15 +246,27 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
                         className="card card-interactive cursor-pointer flex items-center gap-3 p-3 text-inherit no-underline hover:no-underline"
                     >
                         <div className="avatar overflow-hidden">
-                            {person.profilePhotoId && getProfilePhotoUrl(person.profilePhotoId) ? (
-                                <img
-                                    src={getProfilePhotoUrl(person.profilePhotoId) ?? undefined}
-                                    alt={`${person.givenNames ?? ''} ${person.surnames ?? ''}`}
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
-                                <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>
-                            )}
+                            {(() => {
+                                const photo = getProfilePhoto(person.profilePhotoId);
+                                return photo?.storageUrl ? (
+                                    <img
+                                        src={photo.storageUrl}
+                                        alt={`${person.givenNames ?? ''} ${person.surnames ?? ''}`}
+                                        className="w-full h-full object-cover"
+                                        data-zoom={photo.zoomLevel ? 'true' : undefined}
+                                        style={
+                                            photo.zoomLevel && photo.focusX !== undefined && photo.focusY !== undefined
+                                                ? {
+                                                    objectPosition: `${photo.focusX * 100}% ${photo.focusY * 100}%`,
+                                                    transform: `scale(${photo.zoomLevel})`,
+                                                }
+                                                : undefined
+                                        }
+                                    />
+                                ) : (
+                                    <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>
+                                );
+                            })()}
                         </div>
                         <div>
                             <h4 className="font-semibold">

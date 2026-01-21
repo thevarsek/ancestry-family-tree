@@ -52,14 +52,20 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
 
     // Create profile photo map
     const profilePhotoMap = new Map(
-        (profilePhotos ?? []).map((item) => [item.mediaId, item.storageUrl ?? undefined])
+        (profilePhotos ?? []).map((item) => [item.mediaId, item])
     );
 
     // Combine people data with profile photos
-    const peopleWithPhotos = treeData.people.map((person) => ({
-        ...person,
-        profilePhotoUrl: person.profilePhotoId ? profilePhotoMap.get(person.profilePhotoId) : undefined
-    }));
+    const peopleWithPhotos = treeData.people.map((person) => {
+        const photo = person.profilePhotoId ? profilePhotoMap.get(person.profilePhotoId) : undefined;
+        return {
+            ...person,
+            profilePhotoUrl: photo?.storageUrl ?? undefined,
+            profilePhotoZoom: photo?.zoomLevel,
+            profilePhotoFocusX: photo?.focusX,
+            profilePhotoFocusY: photo?.focusY,
+        };
+    });
 
     return (
         <div className="space-y-6">

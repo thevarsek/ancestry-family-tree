@@ -235,6 +235,9 @@ export const create = mutation({
         durationMs: v.optional(v.number()),
         width: v.optional(v.number()),
         height: v.optional(v.number()),
+        zoomLevel: v.optional(v.number()),
+        focusX: v.optional(v.number()),
+        focusY: v.optional(v.number()),
         taggedPersonIds: v.optional(v.array(v.id("people"))),
         links: v.optional(v.array(linkInputValidator))
     },
@@ -295,6 +298,9 @@ export const create = mutation({
             durationMs: args.durationMs,
             width: args.width,
             height: args.height,
+            zoomLevel: args.zoomLevel,
+            focusX: args.focusX,
+            focusY: args.focusY,
             sourceUrl: args.canonicalUrl,
             ocrStatus: args.type === "document" ? "pending" : undefined,
             createdBy: userId,
@@ -499,7 +505,10 @@ export const getUrls = query({
         return Promise.all(
             filtered.map(async (item) => ({
                 mediaId: item._id,
-                storageUrl: item.storageId ? await ctx.storage.getUrl(item.storageId) : undefined
+                storageUrl: item.storageId ? await ctx.storage.getUrl(item.storageId) : undefined,
+                zoomLevel: item.zoomLevel,
+                focusX: item.focusX,
+                focusY: item.focusY
             }))
         );
     }

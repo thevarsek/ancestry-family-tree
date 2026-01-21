@@ -4,6 +4,9 @@ import type { Doc, Id } from '../../../convex/_generated/dataModel';
 
 interface PersonWithPhoto extends Doc<"people"> {
     profilePhotoUrl?: string;
+    profilePhotoZoom?: number;
+    profilePhotoFocusX?: number;
+    profilePhotoFocusY?: number;
 }
 
 interface PedigreeChartProps {
@@ -543,136 +546,142 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
             >
                 <div style={{ width: chartData.width * scale, height: chartData.height * scale, display: 'inline-block', overflow: 'hidden' }}>
                     <svg width={chartData.width} height={chartData.height} style={{ transform: `scale(${scale})`, transformOrigin: 'top left', overflow: 'hidden' }}>
-                    <defs>
-                        <marker
-                            id="arrowhead"
-                            markerWidth="10"
-                            markerHeight="7"
-                            refX="0"
-                            refY="3.5"
-                            orient="auto"
-                        >
-                            <polygon points="0 0, 10 3.5, 0 7" fill="var(--color-border)" />
-                        </marker>
-                    </defs>
+                        <defs>
+                            <marker
+                                id="arrowhead"
+                                markerWidth="10"
+                                markerHeight="7"
+                                refX="0"
+                                refY="3.5"
+                                orient="auto"
+                            >
+                                <polygon points="0 0, 10 3.5, 0 7" fill="var(--color-border)" />
+                            </marker>
+                        </defs>
 
-                    {/* Draw Links - Spouse/Partner */}
-                    {chartData.links.filter(l => l.type === 'spouse').map((link, i) => {
-                        const fromY = link.from.y + NODE_HEIGHT / 2;
-                        const toY = link.to.y + NODE_HEIGHT / 2;
-                        const isLeftToRight = link.from.x <= link.to.x;
-                        const fromX = isLeftToRight ? link.from.x + NODE_WIDTH : link.from.x;
-                        const toX = isLeftToRight ? link.to.x : link.to.x + NODE_WIDTH;
-                        const midX = (fromX + toX) / 2;
-                        const path = `M ${fromX} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toX} ${toY}`;
+                        {/* Draw Links - Spouse/Partner */}
+                        {chartData.links.filter(l => l.type === 'spouse').map((link, i) => {
+                            const fromY = link.from.y + NODE_HEIGHT / 2;
+                            const toY = link.to.y + NODE_HEIGHT / 2;
+                            const isLeftToRight = link.from.x <= link.to.x;
+                            const fromX = isLeftToRight ? link.from.x + NODE_WIDTH : link.from.x;
+                            const toX = isLeftToRight ? link.to.x : link.to.x + NODE_WIDTH;
+                            const midX = (fromX + toX) / 2;
+                            const path = `M ${fromX} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toX} ${toY}`;
 
-                        return (
-                            <path
-                                key={`other-link-${i}`}
-                                d={path}
-                                stroke={link.isHighlighted ? "var(--color-accent)" : "var(--color-border)"}
-                                strokeWidth={link.isHighlighted ? 3 : 2}
-                                fill="none"
-                                opacity={link.isHighlighted ? 0.95 : 0.7}
-                            />
-                        );
-                    })}
-
-                    {/* Draw Links - Grouped by Child to merge parent lines */}
-                    {chartData.links.filter((link) => link.type === 'parent').map((link, i) => {
-                        const fromX = link.from.x + NODE_WIDTH;
-                        const fromY = link.from.y + NODE_HEIGHT / 2;
-                        const toX = link.to.x;
-                        const toY = link.to.y + NODE_HEIGHT / 2;
-                        const midX = (fromX + toX) / 2;
-                        const path = `M ${fromX} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toX} ${toY}`;
-
-                        return (
-                            <path
-                                key={`parent-link-${i}`}
-                                d={path}
-                                stroke={link.isHighlighted ? "var(--color-accent)" : "var(--color-border)"}
-                                strokeWidth={link.isHighlighted ? 3 : 2}
-                                fill="none"
-                                opacity={link.isHighlighted ? 0.95 : 0.7}
-                            />
-                        );
-                    })}
-
-                    {/* Draw Nodes */}
-                    {chartData.nodes.map((node) => (
-                        <g
-                            key={node.id}
-                            transform={`translate(${node.x}, ${node.y})`}
-                            className="cursor-pointer transition-transform"
-                            data-person-id={node.id}
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                handleNodeClick(node.id);
-                            }}
-                        >
-                            <rect
-                                width={NODE_WIDTH}
-                                height={NODE_HEIGHT}
-                                rx="12"
-                                ry="12"
-                                fill="var(--color-surface)"
-                                stroke={node.id === rootPersonId ? "var(--color-accent)" : "var(--color-border)"}
-                                strokeWidth={node.id === rootPersonId ? "3" : "1"}
-                                className="shadow-sm"
-                            />
-                            {/* Profile picture or initials */}
-                            {node.person.profilePhotoUrl ? (
-                                <image
-                                    href={node.person.profilePhotoUrl}
-                                    x={NODE_WIDTH / 2 - 16}
-                                    y={8}
-                                    width={32}
-                                    height={32}
-                                    clipPath="circle(16px at center)"
-                                    preserveAspectRatio="xMidYMid slice"
+                            return (
+                                <path
+                                    key={`other-link-${i}`}
+                                    d={path}
+                                    stroke={link.isHighlighted ? "var(--color-accent)" : "var(--color-border)"}
+                                    strokeWidth={link.isHighlighted ? 3 : 2}
+                                    fill="none"
+                                    opacity={link.isHighlighted ? 0.95 : 0.7}
                                 />
-                            ) : (
-                                <g>
-                                    <circle
-                                        cx={NODE_WIDTH / 2}
-                                        cy={24}
-                                        r="16"
-                                        fill="var(--color-accent-subtle)"
-                                        stroke="var(--color-border)"
-                                        strokeWidth="1"
+                            );
+                        })}
+
+                        {/* Draw Links - Grouped by Child to merge parent lines */}
+                        {chartData.links.filter((link) => link.type === 'parent').map((link, i) => {
+                            const fromX = link.from.x + NODE_WIDTH;
+                            const fromY = link.from.y + NODE_HEIGHT / 2;
+                            const toX = link.to.x;
+                            const toY = link.to.y + NODE_HEIGHT / 2;
+                            const midX = (fromX + toX) / 2;
+                            const path = `M ${fromX} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toX} ${toY}`;
+
+                            return (
+                                <path
+                                    key={`parent-link-${i}`}
+                                    d={path}
+                                    stroke={link.isHighlighted ? "var(--color-accent)" : "var(--color-border)"}
+                                    strokeWidth={link.isHighlighted ? 3 : 2}
+                                    fill="none"
+                                    opacity={link.isHighlighted ? 0.95 : 0.7}
+                                />
+                            );
+                        })}
+
+                        {/* Draw Nodes */}
+                        {chartData.nodes.map((node) => (
+                            <g
+                                key={node.id}
+                                transform={`translate(${node.x}, ${node.y})`}
+                                className="cursor-pointer transition-transform"
+                                data-person-id={node.id}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleNodeClick(node.id);
+                                }}
+                            >
+                                <rect
+                                    width={NODE_WIDTH}
+                                    height={NODE_HEIGHT}
+                                    rx="12"
+                                    ry="12"
+                                    fill="var(--color-surface)"
+                                    stroke={node.id === rootPersonId ? "var(--color-accent)" : "var(--color-border)"}
+                                    strokeWidth={node.id === rootPersonId ? "3" : "1"}
+                                    className="shadow-sm"
+                                />
+                                {/* Profile picture or initials */}
+                                {node.person.profilePhotoUrl ? (
+                                    <image
+                                        href={node.person.profilePhotoUrl}
+                                        x={NODE_WIDTH / 2 - 16}
+                                        y={8}
+                                        width={32}
+                                        height={32}
+                                        style={{
+                                            clipPath: 'circle(16px at center)',
+                                            transformOrigin: `${NODE_WIDTH / 2}px ${24}px`,
+                                            transform: node.person.profilePhotoZoom && node.person.profilePhotoFocusX !== undefined && node.person.profilePhotoFocusY !== undefined
+                                                ? `scale(${node.person.profilePhotoZoom}) translate(${(0.5 - node.person.profilePhotoFocusX) * 32}px, ${(0.5 - node.person.profilePhotoFocusY) * 32}px)`
+                                                : undefined
+                                        }}
+                                        preserveAspectRatio="xMidYMid slice"
                                     />
-                                    <text
-                                        x={NODE_WIDTH / 2}
-                                        y={29}
-                                        textAnchor="middle"
-                                        className="font-bold text-sm"
-                                        fill="var(--color-text-primary)"
-                                    >
-                                        {(node.person.givenNames?.[0] || '') + (node.person.surnames?.[0] || '')}
-                                    </text>
-                                </g>
-                            )}
-                            <text
-                                x={NODE_WIDTH / 2}
-                                y={node.person.profilePhotoUrl ? 60 : 55}
-                                textAnchor="middle"
-                                className="font-bold text-sm"
-                                fill="var(--color-text-primary)"
-                            >
-                                {node.person.givenNames} {node.person.surnames}
-                            </text>
-                            <text
-                                x={NODE_WIDTH / 2}
-                                y={node.person.profilePhotoUrl ? 75 : 70}
-                                textAnchor="middle"
-                                className="text-xs"
-                                fill="var(--color-text-muted)"
-                            >
-                                {node.person.isLiving ? 'Living' : 'Deceased'}
-                            </text>
-                        </g>
-                    ))}
+                                ) : (
+                                    <g>
+                                        <circle
+                                            cx={NODE_WIDTH / 2}
+                                            cy={24}
+                                            r="16"
+                                            fill="var(--color-accent-subtle)"
+                                            stroke="var(--color-border)"
+                                            strokeWidth="1"
+                                        />
+                                        <text
+                                            x={NODE_WIDTH / 2}
+                                            y={29}
+                                            textAnchor="middle"
+                                            className="font-bold text-sm"
+                                            fill="var(--color-text-primary)"
+                                        >
+                                            {(node.person.givenNames?.[0] || '') + (node.person.surnames?.[0] || '')}
+                                        </text>
+                                    </g>
+                                )}
+                                <text
+                                    x={NODE_WIDTH / 2}
+                                    y={node.person.profilePhotoUrl ? 60 : 55}
+                                    textAnchor="middle"
+                                    className="font-bold text-sm"
+                                    fill="var(--color-text-primary)"
+                                >
+                                    {node.person.givenNames} {node.person.surnames}
+                                </text>
+                                <text
+                                    x={NODE_WIDTH / 2}
+                                    y={node.person.profilePhotoUrl ? 75 : 70}
+                                    textAnchor="middle"
+                                    className="text-xs"
+                                    fill="var(--color-text-muted)"
+                                >
+                                    {node.person.isLiving ? 'Living' : 'Deceased'}
+                                </text>
+                            </g>
+                        ))}
                     </svg>
                 </div>
             </div>

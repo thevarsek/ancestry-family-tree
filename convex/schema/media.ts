@@ -46,6 +46,10 @@ export const mediaTables = {
             v.literal("needs_premium_ocr")
         )),
         ocrText: v.optional(v.string()),
+        // Profile photo customization
+        zoomLevel: v.optional(v.number()),
+        focusX: v.optional(v.number()),
+        focusY: v.optional(v.number()),
         createdBy: v.id("users"),
         createdAt: v.number()
     }).index("by_tree", ["treeId"])

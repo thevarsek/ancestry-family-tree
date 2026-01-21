@@ -65,6 +65,11 @@ export function MediaUploadModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showPersonModal, setShowPersonModal] = useState(false);
+    const [zoomLevel, setZoomLevel] = useState(1);
+    const [focusX, setFocusX] = useState(0.5);
+    const [focusY, setFocusY] = useState(0.5);
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0, focusX: 0.5, focusY: 0.5 });
 
     const people = useQuery(api.people.list, { treeId, limit: 200 });
     const sources = useQuery(api.sources.list, { treeId, limit: 200 });
@@ -73,6 +78,43 @@ export function MediaUploadModal({
     const generateUploadUrl = useMutation(api.media.generateUploadUrl);
     const createMedia = useMutation(api.media.create);
     const setProfilePhoto = useMutation(api.people.setProfilePhoto);
+
+    // Handle drag functionality
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDragging) return;
+
+            const previewElement = document.querySelector('.profile-photo-preview') as HTMLElement;
+            if (!previewElement) return;
+
+            const rect = previewElement.getBoundingClientRect();
+            // Calculate how much we've moved in pixels
+            const deltaX = e.clientX - dragStart.x;
+            const deltaY = e.clientY - dragStart.y;
+
+            // Convert pixels to focus coordinates (0-1)
+            // Focus moves OPPOSITE to image movement
+            const newFocusX = dragStart.focusX - (deltaX / rect.width) / zoomLevel;
+            const newFocusY = dragStart.focusY - (deltaY / rect.height) / zoomLevel;
+
+            setFocusX(Math.max(0, Math.min(1, newFocusX)));
+            setFocusY(Math.max(0, Math.min(1, newFocusY)));
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+        };
+
+        if (isDragging) {
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging, dragStart, zoomLevel]);
 
     useEffect(() => {
         if (defaultLinks) {
@@ -153,6 +195,9 @@ export function MediaUploadModal({
                 role: setAsProfilePhoto ? 'profile_photo' : 'attachment',
                 mimeType,
                 fileSizeBytes: file.size,
+                zoomLevel: setAsProfilePhoto ? zoomLevel : undefined,
+                focusX: setAsProfilePhoto ? focusX : undefined,
+                focusY: setAsProfilePhoto ? focusY : undefined,
                 taggedPersonIds: taggedPersonIds.length ? taggedPersonIds : undefined,
                 links: selectedLinks.length ? selectedLinks : undefined
             });
@@ -213,6 +258,80 @@ export function MediaUploadModal({
                             />
                             <p className="text-xs text-muted">Images, PDFs, DOCX, and audio files up to 25MB.</p>
                         </div>
+
+                        {file && file.type.startsWith('image/') && setAsProfilePhoto && (
+                            <div className="input-group">
+                                <label className="input-label">Profile Photo Crop</label>
+                                <div className="space-y-4">
+                                    <div
+                                        className="profile-photo-preview relative mx-auto border border-border rounded-md overflow-hidden bg-gray-100 cursor-move select-none"
+                                        style={{ width: '256px', height: '256px' }}
+                                        onMouseDown={(e) => {
+                                            setIsDragging(true);
+                                            setDragStart({
+                                                x: e.clientX,
+                                                y: e.clientY,
+                                                focusX: focusX,
+                                                focusY: focusY
+                                            });
+                                            e.preventDefault();
+                                        }}
+                                    >
+                                        <img
+                                            src={URL.createObjectURL(file)}
+                                            alt="Preview"
+                                            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                                            style={{
+                                                objectPosition: `${focusX * 100}% ${focusY * 100}%`,
+                                                transform: `scale(${zoomLevel})`,
+                                            }}
+                                            onLoad={(e) => URL.revokeObjectURL((e.target as HTMLImageElement).src)}
+                                        />
+                                        {/* Circular Mask Overlay - Square div, circular hole */}
+                                        <div
+                                            className="absolute inset-0 pointer-events-none"
+                                            style={{
+                                                borderRadius: '50%',
+                                                width: '256px',
+                                                height: '256px',
+                                                border: '2px solid white',
+                                                boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
+                                                boxSizing: 'border-box'
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <label className="text-sm font-medium">Zoom: {zoomLevel.toFixed(2)}x</label>
+                                            <button
+                                                type="button"
+                                                className="text-xs text-accent hover:underline"
+                                                onClick={() => {
+                                                    setZoomLevel(1);
+                                                    setFocusX(0.5);
+                                                    setFocusY(0.5);
+                                                }}
+                                            >
+                                                Reset
+                                            </button>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0.1"
+                                            max="5"
+                                            step="0.01"
+                                            value={zoomLevel}
+                                            onChange={(e) => setZoomLevel(parseFloat(e.target.value))}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-muted">
+                                        Drag the image to position it. Use the slider to zoom in or out.
+                                        The clear circle shows exactly how your profile photo will be cropped.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="input-group">
                             <label className="input-label">Tag People</label>

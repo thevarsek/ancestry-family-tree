@@ -177,6 +177,15 @@ export function PersonPage() {
                                 src={profilePhoto.storageUrl}
                                 alt={`${person.givenNames ?? ''} ${person.surnames ?? ''}`}
                                 className="w-full h-full object-cover"
+                                data-zoom={profilePhoto.zoomLevel ? 'true' : undefined}
+                                style={
+                                    profilePhoto.zoomLevel && profilePhoto.focusX !== undefined && profilePhoto.focusY !== undefined
+                                        ? {
+                                            objectPosition: `${profilePhoto.focusX * 100}% ${profilePhoto.focusY * 100}%`,
+                                            transform: `scale(${profilePhoto.zoomLevel})`,
+                                        }
+                                        : undefined
+                                }
                             />
                         ) : (
                             <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>
@@ -511,9 +520,9 @@ export function PersonPage() {
                                                                     ? (claim.value.customFields as { title?: string } | undefined)?.title || 'Custom event'
                                                                     : claim.claimType.replace('_', ' ')}
                                                             </div>
-                                                                <div className="text-xs text-muted">
-                                                                    {formatClaimDate(claim.value) || 'Unknown date'}
-                                                                </div>
+                                                            <div className="text-xs text-muted">
+                                                                {formatClaimDate(claim.value) || 'Unknown date'}
+                                                            </div>
                                                         </div>
                                                         <button
                                                             className="btn btn-ghost btn-sm"

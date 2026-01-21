@@ -82,3 +82,14 @@
 .rounded-full {
     border-radius: var(--radius-full) !important;
 }
+
+.object-cover {
+    object-fit: cover !important;
+}
+
+.inset-0 {
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+}
