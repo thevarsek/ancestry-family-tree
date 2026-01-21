@@ -98,8 +98,6 @@ export const processDocument = action({
                 throw new Error("Unable to download media file");
             }
 
-            const buffer = await response.arrayBuffer();
-
             let text = "";
             if (args.mimeType === "application/pdf") {
                 // For now, just mark as processed without actual OCR
