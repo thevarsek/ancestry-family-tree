@@ -1,6 +1,59 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireUser, getCurrentUser } from "./lib/auth";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+
+export const acceptPendingInvitations = async (
+    ctx: MutationCtx,
+    userId: Id<"users">,
+    email: string | undefined
+) => {
+    if (!email) {
+        return;
+    }
+
+    const normalizedEmail = email.toLowerCase();
+    const invitations = await ctx.db
+        .query("invitations")
+        .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+        .collect();
+
+    const now = Date.now();
+    const validInvitations = invitations.filter((invitation) =>
+        !invitation.acceptedAt && invitation.expiresAt > now
+    );
+
+    for (const invitation of validInvitations) {
+        const existingMembership = await ctx.db
+            .query("treeMemberships")
+            .withIndex("by_tree_user", (q) =>
+                q.eq("treeId", invitation.treeId).eq("userId", userId)
+            )
+            .unique();
+
+        if (!existingMembership) {
+            await ctx.db.insert("treeMemberships", {
+                treeId: invitation.treeId,
+                userId,
+                role: invitation.role,
+                invitedBy: invitation.invitedBy,
+                joinedAt: now
+            });
+
+            await ctx.db.insert("auditLog", {
+                treeId: invitation.treeId,
+                userId,
+                action: "invitation_accepted",
+                entityType: "invitation",
+                entityId: invitation._id,
+                timestamp: now
+            });
+        }
+
+        await ctx.db.patch(invitation._id, { acceptedAt: now });
+    }
+};
 
 /**
  * Get or create user from Clerk auth
@@ -36,6 +89,7 @@ export const getOrCreate = mutation({
                 await ctx.db.patch(existingUser._id, updates);
             }
 
+            await acceptPendingInvitations(ctx, existingUser._id, identity.email);
             return existingUser._id;
         }
 
@@ -48,6 +102,7 @@ export const getOrCreate = mutation({
             createdAt: Date.now(),
         });
 
+        await acceptPendingInvitations(ctx, userId, identity.email);
         return userId;
     },
 });

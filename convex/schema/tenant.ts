@@ -42,6 +42,7 @@ export const tenantTables = {
         email: v.string(),
         role: v.union(v.literal("admin"), v.literal("user")),
         token: v.string(),
+        clerkInvitationId: v.optional(v.string()),
         invitedBy: v.id("users"),
         createdAt: v.number(),
         expiresAt: v.number(),

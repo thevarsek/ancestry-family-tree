@@ -1,12 +1,90 @@
-import { mutation, query } from "./_generated/server";
+import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { api } from "./_generated/api";
 import { requireTreeAdmin, requireUser } from "./lib/auth";
+import type { Id } from "./_generated/dataModel";
 
-export const invite = mutation({
+const clerkInvitationEndpoint = "https://api.clerk.com/v1/invitations";
+
+const getClerkSecretKey = () => {
+    const secretKey = process.env.CLERK_SECRET_KEY;
+    if (!secretKey) {
+        throw new Error("Missing CLERK_SECRET_KEY in Convex environment variables");
+    }
+    return secretKey;
+};
+
+const createClerkInvitation = async (email: string, treeId: Id<"trees">, role: string) => {
+    const response = await fetch(clerkInvitationEndpoint, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${getClerkSecretKey()}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            email_address: email,
+            public_metadata: {
+                treeId,
+                role
+            }
+        })
+    });
+
+    if (!response.ok) {
+        let message = "Failed to create Clerk invitation";
+        try {
+            const data = await response.json();
+            const clerkMessage = data?.errors?.[0]?.message;
+            if (clerkMessage) {
+                message = clerkMessage;
+            }
+        } catch (error) {
+            console.error("Failed to read Clerk error response:", error);
+        }
+        throw new Error(message);
+    }
+
+    return await response.json() as { id: string };
+};
+
+const revokeClerkInvitation = async (invitationId: string) => {
+    const response = await fetch(`${clerkInvitationEndpoint}/${invitationId}/revoke`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${getClerkSecretKey()}`,
+            "Content-Type": "application/json"
+        }
+    });
+
+    if (!response.ok) {
+        let message = "Failed to revoke Clerk invitation";
+        try {
+            const data = await response.json();
+            const clerkMessage = data?.errors?.[0]?.message;
+            if (clerkMessage) {
+                message = clerkMessage;
+            }
+        } catch (error) {
+            console.error("Failed to read Clerk revoke error response:", error);
+        }
+        throw new Error(message);
+    }
+};
+
+export const ensureAdmin = mutation({
+    args: { treeId: v.id("trees") },
+    handler: async (ctx, args) => {
+        const { userId } = await requireTreeAdmin(ctx, args.treeId);
+        return userId;
+    }
+});
+
+export const createInvitation = mutation({
     args: {
         treeId: v.id("trees"),
         email: v.string(),
-        role: v.union(v.literal("admin"), v.literal("user"))
+        role: v.union(v.literal("admin"), v.literal("user")),
+        clerkInvitationId: v.optional(v.string())
     },
     handler: async (ctx, args) => {
         const { userId } = await requireTreeAdmin(ctx, args.treeId);
@@ -19,6 +97,7 @@ export const invite = mutation({
             email: args.email.toLowerCase(),
             role: args.role,
             token,
+            clerkInvitationId: args.clerkInvitationId,
             invitedBy: userId,
             createdAt: now,
             expiresAt: now + 7 * 24 * 60 * 60 * 1000
@@ -35,6 +114,22 @@ export const invite = mutation({
         });
 
         return { invitationId, token };
+    }
+});
+
+export const invite = action({
+    args: {
+        treeId: v.id("trees"),
+        email: v.string(),
+        role: v.union(v.literal("admin"), v.literal("user"))
+    },
+    handler: async (ctx, args): Promise<{ invitationId: Id<"invitations">; token: string }> => {
+        await ctx.runMutation(api.treesInvitations.ensureAdmin, { treeId: args.treeId });
+        const clerkInvitation = await createClerkInvitation(args.email, args.treeId, args.role);
+        return await ctx.runMutation(api.treesInvitations.createInvitation, {
+            ...args,
+            clerkInvitationId: clerkInvitation.id
+        });
     }
 });
 
@@ -110,7 +205,22 @@ export const getInvitations = query({
     }
 });
 
-export const cancelInvitation = mutation({
+export const getInvitationForCancel = query({
+    args: {
+        treeId: v.id("trees"),
+        invitationId: v.id("invitations")
+    },
+    handler: async (ctx, args) => {
+        await requireTreeAdmin(ctx, args.treeId);
+        const invitation = await ctx.db.get(args.invitationId);
+        if (!invitation || invitation.treeId !== args.treeId) {
+            throw new Error("Invitation not found");
+        }
+        return invitation;
+    }
+});
+
+export const deleteInvitation = mutation({
     args: {
         treeId: v.id("trees"),
         invitationId: v.id("invitations")
@@ -135,5 +245,27 @@ export const cancelInvitation = mutation({
         });
 
         return args.treeId;
+    }
+});
+
+export const cancelInvitation = action({
+    args: {
+        treeId: v.id("trees"),
+        invitationId: v.id("invitations")
+    },
+    handler: async (ctx, args): Promise<Id<"trees">> => {
+        const invitation = await ctx.runQuery(api.treesInvitations.getInvitationForCancel, {
+            treeId: args.treeId,
+            invitationId: args.invitationId
+        });
+
+        if (invitation.clerkInvitationId) {
+            await revokeClerkInvitation(invitation.clerkInvitationId);
+        }
+
+        return await ctx.runMutation(api.treesInvitations.deleteInvitation, {
+            treeId: args.treeId,
+            invitationId: args.invitationId
+        });
     }
 });

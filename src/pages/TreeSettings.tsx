@@ -1,20 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery, useMutation } from 'convex/react';
+import { useAction, useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Doc, Id } from '../../convex/_generated/dataModel';
+import { ConfirmModal } from '../components/ui/ConfirmModal';
 
 export function TreeSettings() {
     const { treeId } = useParams<{ treeId: string }>();
     const tree = useQuery(api.trees.get, treeId ? { treeId: treeId as Id<"trees"> } : "skip");
     const members = useQuery(api.trees.getMembers, treeId ? { treeId: treeId as Id<"trees"> } : "skip");
-    const invitations = useQuery(api.trees.getInvitations, treeId ? { treeId: treeId as Id<"trees"> } : "skip");
+    const invitations = useQuery(
+        api.trees.getInvitations,
+        treeId && tree?.role === 'admin' ? { treeId: treeId as Id<"trees"> } : "skip"
+    );
 
     const updateTree = useMutation(api.trees.update);
     const updateMemberRole = useMutation(api.trees.updateMemberRole);
     const removeMember = useMutation(api.trees.removeMember);
-    const inviteMember = useMutation(api.trees.invite);
-    const cancelInvitation = useMutation(api.trees.cancelInvitation);
+    const inviteMember = useAction(api.trees.invite);
+    const cancelInvitation = useAction(api.trees.cancelInvitation);
 
     const [name, setName] = useState(tree?.name || '');
     const [description, setDescription] = useState(tree?.description || '');
@@ -22,14 +26,21 @@ export function TreeSettings() {
     const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
     const [isSaving, setIsSaving] = useState(false);
     const [inviteStatus, setInviteStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const [removeTarget, setRemoveTarget] = useState<{ userId: Id<"users">; name: string } | null>(null);
+    const [isRemoving, setIsRemoving] = useState(false);
+    const [removeError, setRemoveError] = useState<string | null>(null);
+    const [cancelTarget, setCancelTarget] = useState<{ invitationId: Id<"invitations">; email: string } | null>(null);
+    const [isCanceling, setIsCanceling] = useState(false);
+    const [cancelError, setCancelError] = useState<string | null>(null);
 
     // Update local state when tree data loads
-    useState(() => {
+    useEffect(() => {
         if (tree) {
             setName(tree.name);
             setDescription(tree.description || '');
         }
-    });
+    }, [tree]);
 
     if (!tree || !members) {
         return <div className="spinner spinner-lg mx-auto mt-12" />;
@@ -46,10 +57,10 @@ export function TreeSettings() {
                 name,
                 description,
             });
-            alert("Tree updated successfully!");
+            setStatusMessage({ type: 'success', message: 'Tree updated successfully.' });
         } catch (error) {
             console.error(error);
-            alert("Failed to update tree.");
+            setStatusMessage({ type: 'error', message: 'Failed to update tree.' });
         } finally {
             setIsSaving(false);
         }
@@ -62,23 +73,15 @@ export function TreeSettings() {
                 userId,
                 role: newRole,
             });
+            setStatusMessage({ type: 'success', message: 'Member role updated.' });
         } catch (error) {
             console.error(error);
-            alert("Failed to update role.");
+            setStatusMessage({ type: 'error', message: 'Failed to update role.' });
         }
     };
 
-    const handleRemoveMember = async (userId: Id<"users">) => {
-        if (!confirm("Are you sure you want to remove this member?")) return;
-        try {
-            await removeMember({
-                treeId: tree._id,
-                userId,
-            });
-        } catch (error) {
-            console.error(error);
-            alert("Failed to remove member.");
-        }
+    const handleRemoveMember = (userId: Id<"users">, name: string) => {
+        setRemoveTarget({ userId, name });
     };
 
     const handleInvite = async (e: React.FormEvent) => {
@@ -97,15 +100,45 @@ export function TreeSettings() {
         }
     };
 
-    const handleCancelInvite = async (invitationId: Id<"invitations">) => {
+    const handleConfirmRemove = async () => {
+        if (!removeTarget) return;
+        setIsRemoving(true);
+        setRemoveError(null);
+        try {
+            await removeMember({
+                treeId: tree._id,
+                userId: removeTarget.userId,
+            });
+            setStatusMessage({ type: 'success', message: `Removed ${removeTarget.name} from the tree.` });
+            setRemoveTarget(null);
+        } catch (error) {
+            console.error(error);
+            setRemoveError('Failed to remove member.');
+        } finally {
+            setIsRemoving(false);
+        }
+    };
+
+    const handleCancelInvite = (invitationId: Id<"invitations">, email: string) => {
+        setCancelTarget({ invitationId, email });
+    };
+
+    const handleConfirmCancel = async () => {
+        if (!cancelTarget) return;
+        setIsCanceling(true);
+        setCancelError(null);
         try {
             await cancelInvitation({
                 treeId: tree._id,
-                invitationId,
+                invitationId: cancelTarget.invitationId,
             });
+            setStatusMessage({ type: 'success', message: `Canceled invitation for ${cancelTarget.email}.` });
+            setCancelTarget(null);
         } catch (error) {
             console.error(error);
-            alert("Failed to cancel invitation.");
+            setCancelError('Failed to cancel invitation.');
+        } finally {
+            setIsCanceling(false);
         }
     };
 
@@ -131,6 +164,16 @@ export function TreeSettings() {
                     <span>Settings</span>
                 </div>
                 <h1 className="text-3xl font-bold">Tree Settings</h1>
+                {statusMessage && (
+                    <div
+                        className={`mt-4 text-sm p-3 rounded ${statusMessage.type === 'success'
+                            ? 'bg-success-bg text-success'
+                            : 'bg-error-bg text-error'
+                        }`}
+                    >
+                        {statusMessage.message}
+                    </div>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -216,7 +259,7 @@ export function TreeSettings() {
                                                     {member.userId !== tree.createdBy && (
                                                         <button
                                                             className="btn btn-ghost btn-sm text-error opacity-0 group-hover:opacity-100"
-                                                            onClick={() => handleRemoveMember(member.userId)}
+                                                            onClick={() => handleRemoveMember(member.userId, member.name)}
                                                         >
                                                             Remove
                                                         </button>
@@ -284,7 +327,7 @@ export function TreeSettings() {
                                         {isAdmin && (
                                             <button
                                                 className="btn btn-ghost btn-sm text-error"
-                                                onClick={() => handleCancelInvite(inv._id)}
+                                                onClick={() => handleCancelInvite(inv._id, inv.email)}
                                             >
                                                 Cancel
                                             </button>
@@ -298,6 +341,36 @@ export function TreeSettings() {
                     </section>
                 </div>
             </div>
+            {removeTarget && (
+                <ConfirmModal
+                    title="Remove Member"
+                    description={`Removing ${removeTarget.name} will revoke their access to this tree. This action cannot be undone.`}
+                    confirmLabel="Remove Member"
+                    busyLabel="Removing..."
+                    isBusy={isRemoving}
+                    errorMessage={removeError}
+                    onClose={() => {
+                        setRemoveTarget(null);
+                        setRemoveError(null);
+                    }}
+                    onConfirm={handleConfirmRemove}
+                />
+            )}
+            {cancelTarget && (
+                <ConfirmModal
+                    title="Cancel Invitation"
+                    description={`Canceling the invitation for ${cancelTarget.email} will prevent them from joining this tree.`}
+                    confirmLabel="Cancel Invitation"
+                    busyLabel="Canceling..."
+                    isBusy={isCanceling}
+                    errorMessage={cancelError}
+                    onClose={() => {
+                        setCancelTarget(null);
+                        setCancelError(null);
+                    }}
+                    onConfirm={handleConfirmCancel}
+                />
+            )}
         </div>
     );
 }

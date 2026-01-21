@@ -48,9 +48,6 @@ export function TreePage() {
                         <Link to={`/tree/${tree._id}/settings`} className="btn btn-secondary">
                             Settings
                         </Link>
-                        <button className="btn btn-secondary">
-                            Invite
-                        </button>
                     </div>
                 </div>
             </div>

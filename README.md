@@ -60,6 +60,12 @@ cp .env.example .env.local
 
 Fill in the values in `.env.local` with your Convex and Clerk credentials.
 
+Set the Clerk backend key in Convex environment variables:
+
+```bash
+npx convex env set CLERK_SECRET_KEY=your_clerk_secret_key
+```
+
 ### Development
 
 Start the frontend and backend development servers:
