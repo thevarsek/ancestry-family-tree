@@ -1,10 +1,14 @@
 import { query } from "./_generated/server";
-import { requireUser } from "./lib/auth";
+import { getCurrentUser } from "./lib/auth";
 
 export const list = query({
     args: {},
     handler: async (ctx) => {
-        const user = await requireUser(ctx);
+        const user = await getCurrentUser(ctx);
+
+        if (!user) {
+            return [];
+        }
 
         const memberships = await ctx.db
             .query("treeMemberships")
