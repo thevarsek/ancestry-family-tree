@@ -33,6 +33,8 @@ interface ProfilePhotoCropState {
     focusY: number;
     /** Whether the user is currently dragging */
     isDragging: boolean;
+    /** Natural image dimensions (original size from file) */
+    imageSize: Size;
     /** Calculated cover size to fill the preview area */
     coverSize: Size;
     /** Scaled size after applying zoom */
@@ -248,6 +250,7 @@ export function useProfilePhotoCrop(options: UseProfilePhotoCropOptions = {}): P
         focusX,
         focusY,
         isDragging,
+        imageSize,
         coverSize,
         scaledSize,
         translateX,

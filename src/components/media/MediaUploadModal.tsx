@@ -114,8 +114,9 @@ export function MediaUploadModal({
             const { storageId } = await uploadResponse.json() as { storageId: Id<'_storage'> };
             const mimeType = file.type;
             const mediaType = inferMediaType(mimeType);
-            const width = crop.coverSize.width || undefined;
-            const height = crop.coverSize.height || undefined;
+            // Use natural image dimensions (not cover-scaled size) for proper cropping
+            const width = crop.imageSize.width || undefined;
+            const height = crop.imageSize.height || undefined;
 
             const mediaId = await createMedia({
                 treeId,
