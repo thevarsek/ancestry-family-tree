@@ -292,6 +292,108 @@ export function buildPedigreeLayout<TPerson extends Doc<"people">>(
 
     generations.forEach(assignGeneration);
 
+    const adjustGenerationToParents = (generation: number) => {
+        const genNodes = nodes.filter(n => n.generation === generation);
+        if (!genNodes.length) return;
+
+        const desiredCenterById = new Map<Id<"people">, number | null>();
+        genNodes.forEach((node) => {
+            const parents = parentsByChild.get(node.id) ?? [];
+            const parentCenters = parents
+                .map(parentId => positioned.get(parentId))
+                .filter((y): y is number => typeof y === 'number')
+                .map((y) => y + nodeHeight / 2);
+
+            if (!parentCenters.length) {
+                desiredCenterById.set(node.id, null);
+                return;
+            }
+
+            desiredCenterById.set(
+                node.id,
+                parentCenters.reduce((a, b) => a + b, 0) / parentCenters.length
+            );
+        });
+
+        const blocks: Block<TPerson>[] = [];
+        const used = new Set<Id<"people">>();
+
+        genNodes.forEach((node) => {
+            if (used.has(node.id)) return;
+
+            const spouses = (spousesByPerson.get(node.id) ?? [])
+                .filter(id => genNodes.some(candidate => candidate.id === id))
+                .sort();
+
+            let blockNodes = [node];
+            if (spouses.length) {
+                const spouseNode = genNodes.find(candidate => candidate.id === spouses[0]);
+                if (spouseNode && !used.has(spouseNode.id)) {
+                    blockNodes = node.id < spouseNode.id ? [node, spouseNode] : [spouseNode, node];
+                }
+            }
+
+            blockNodes.forEach(member => used.add(member.id));
+
+            const desiredCenters = blockNodes
+                .map(member => desiredCenterById.get(member.id))
+                .filter((value): value is number => typeof value === 'number');
+
+            const desiredCenter = desiredCenters.length
+                ? desiredCenters.reduce((a, b) => a + b, 0) / desiredCenters.length
+                : null;
+
+            const height = nodeHeight + (blockNodes.length - 1) * partnerGap;
+            const key = blockNodes.map(member => member.id).join('-');
+
+            blocks.push({ nodes: blockNodes, desiredCenter, height, key });
+        });
+
+        blocks.sort((a, b) => {
+            const aTop = Math.min(...a.nodes.map(node => positioned.get(node.id) ?? 0));
+            const bTop = Math.min(...b.nodes.map(node => positioned.get(node.id) ?? 0));
+            if (aTop !== bTop) return aTop - bTop;
+            return a.key.localeCompare(b.key);
+        });
+
+        const blockTops: number[] = [];
+        const blend = 0.65;
+
+        blocks.forEach((block, index) => {
+            const currentTop = Math.min(...block.nodes.map(node => positioned.get(node.id) ?? 0));
+            const desiredTop = block.desiredCenter !== null
+                ? block.desiredCenter - block.height / 2
+                : currentTop;
+            const blendedTop = currentTop + (desiredTop - currentTop) * blend;
+
+            const prevTop = index === 0 ? null : blockTops[index - 1];
+            const prevHeight = index === 0 ? 0 : blocks[index - 1].height;
+            const minTop = prevTop === null ? blendedTop : prevTop + prevHeight + rowGap;
+
+            blockTops[index] = Math.max(blendedTop, minTop);
+        });
+
+        for (let i = blocks.length - 2; i >= 0; i -= 1) {
+            const nextTop = blockTops[i + 1];
+            const maxTop = nextTop - blocks[i].height - rowGap;
+            if (blockTops[i] > maxTop) {
+                blockTops[i] = maxTop;
+            }
+        }
+
+        blocks.forEach((block, index) => {
+            const top = blockTops[index];
+            block.nodes.forEach((member, memberIndex) => {
+                const y = top + memberIndex * partnerGap;
+                member.y = y;
+                positioned.set(member.id, y);
+            });
+        });
+    };
+
+    const ascendingGens = unique([...generationById.values()]).sort((a, b) => a - b);
+    ascendingGens.forEach(adjustGenerationToParents);
+
     const minY = Math.min(...nodes.map(node => node.y));
     if (minY < 0) {
         nodes.forEach(node => { node.y = node.y - minY; });
