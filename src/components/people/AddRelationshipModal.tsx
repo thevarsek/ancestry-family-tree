@@ -65,8 +65,8 @@ export function AddRelationshipModal({
 
         try {
             await Promise.all(selectedPersonIds.map(async (selectedPersonId) => {
-                // Determine p1 and p2 based on type and role
-                // For parent_child: p1 is parent, p2 is child
+                // Determine p1 and p2 based on type and role.
+                // For parent_child: personId1 is parent, personId2 is child.
                 let p1 = personId;
                 let p2 = selectedPersonId;
 

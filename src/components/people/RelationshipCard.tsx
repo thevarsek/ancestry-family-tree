@@ -14,11 +14,13 @@ const relationshipStatusConfig: Record<RelationshipStatus, { label: string; tone
 export function RelationshipCard({
     relationship,
     person,
-    onDelete
+    onDelete,
+    roleLabel
 }: {
     relationship: Doc<"relationships">;
     person?: Doc<"people"> | null;
     onDelete?: (id: Id<"relationships">) => void;
+    roleLabel?: string;
 }) {
     if (!person) {
         return null;
@@ -43,7 +45,7 @@ export function RelationshipCard({
                     <div className="text-xs text-muted flex items-center gap-2">
                         <span className="capitalize">
                             {relationship.type === 'parent_child'
-                                ? 'Parent/Child'
+                                ? (roleLabel ?? 'Parent/Child')
                                 : relationship.type.replace('_', ' ')}
                         </span>
                         {statusConfig && (

@@ -425,6 +425,11 @@ export function PersonPage() {
                                     : category === 'Spouses' ? relationships.spouses
                                         : category === 'Siblings' ? relationships.siblings
                                             : relationships.children;
+                                const roleLabel = category === 'Parents'
+                                    ? 'Parent'
+                                    : category === 'Children'
+                                        ? 'Child'
+                                        : undefined;
 
                                 return (
                                     <div key={category} className="space-y-2">
@@ -432,14 +437,15 @@ export function PersonPage() {
                                         {list.length === 0 ? (
                                             <p className="text-sm text-muted italic">None recorded</p>
                                         ) : (
-                                            list.map((r: { relationship: Doc<"relationships">; person?: Doc<"people"> | null }) => (
-                                                <RelationshipCard
-                                                    key={r.relationship._id}
-                                                    relationship={r.relationship}
-                                                    person={r.person}
-                                                    onDelete={handleDeleteRelationship}
-                                                />
-                                            ))
+                                                list.map((r: { relationship: Doc<"relationships">; person?: Doc<"people"> | null }) => (
+                                                    <RelationshipCard
+                                                        key={r.relationship._id}
+                                                        relationship={r.relationship}
+                                                        person={r.person}
+                                                        onDelete={handleDeleteRelationship}
+                                                        roleLabel={roleLabel}
+                                                    />
+                                                ))
                                         )}
                                     </div>
                                 );
