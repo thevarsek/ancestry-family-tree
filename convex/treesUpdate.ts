@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireTreeAdmin } from "./lib/auth";
+import { insertAuditLog } from "./lib/auditLog";
 
 export const update = mutation({
     args: {
@@ -46,14 +47,13 @@ export const update = mutation({
 
         await ctx.db.patch(args.treeId, updates);
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: args.treeId,
             userId,
             action: "tree_updated",
             entityType: "tree",
             entityId: args.treeId,
             changes: updates,
-            timestamp: Date.now()
         });
 
         return args.treeId;

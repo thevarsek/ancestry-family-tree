@@ -75,9 +75,9 @@ export function AddClaimModal({
             setIsCurrent(Boolean(initialClaim.value.isCurrent));
             setPlaceId((initialClaim.value.placeId as Id<"places"> | undefined) ?? '');
             setDescription(initialClaim.value.description ?? '');
-            const customFields = initialClaim.value.customFields as { title?: string } | undefined;
+            const customFields = initialClaim.value.customFields as { title?: string; relatedPersonIds?: Id<"people">[] } | undefined;
             setCustomTitle(customFields?.title ?? '');
-            setTaggedPeople([]);
+            setTaggedPeople(customFields?.relatedPersonIds ?? []);
             setSelectedSourceIds(
                 (initialClaim.sources ?? []).map((source: Doc<"sources">) => source._id)
             );
@@ -135,6 +135,7 @@ export function AddClaimModal({
                         datePrecision: 'year',
                         customFields,
                     },
+                    relatedPersonIds: taggedPeople.length ? taggedPeople : undefined,
                 });
 
                 const existingSourceIds = new Set(

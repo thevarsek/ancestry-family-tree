@@ -1,6 +1,7 @@
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireTreeAccess, requireTreeAdmin } from "./lib/auth";
+import { insertAuditLog } from "./lib/auditLog";
 import { Id } from "./_generated/dataModel";
 
 /**
@@ -183,7 +184,7 @@ export const create = mutation({
             updatedAt: now,
         });
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: args.treeId,
             userId,
             action: "person_created",
@@ -260,7 +261,7 @@ export const update = mutation({
             });
         }
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: person.treeId,
             userId,
             action: "person_updated",
@@ -305,14 +306,14 @@ export const setProfilePhoto = mutation({
             updatedAt: now
         });
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: person.treeId,
             userId,
             action: "person_profile_photo_set",
             entityType: "person",
             entityId: args.personId,
             changes: { profilePhotoId: args.mediaId },
-            timestamp: now
+            timestamp: now,
         });
 
         return args.personId;
@@ -372,7 +373,7 @@ export const remove = mutation({
         // Delete the person
         await ctx.db.delete(args.personId);
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: person.treeId,
             userId,
             action: "person_deleted",

@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { usePanZoom } from '../../hooks/usePanZoom';
 import { exportSvgChart, type ChartExportFormat } from './chartExport';
 import {
     buildTimelineLayout,
@@ -63,22 +64,7 @@ export function TimelineChart({
     onToggleFullscreen,
 }: TimelineChartProps) {
     const navigate = useNavigate();
-    const containerRef = useRef<HTMLDivElement | null>(null);
     const svgRef = useRef<SVGSVGElement | null>(null);
-    
-    // Zoom/pan state
-    const [scale, setScale] = useState(1);
-    const [isPanning, setIsPanning] = useState(false);
-    const panState = useRef({
-        startX: 0,
-        startY: 0,
-        scrollLeft: 0,
-        scrollTop: 0,
-        moved: false,
-        lastPanAt: 0,
-        isPointerDown: false,
-        isPanning: false,
-    });
     
     // Tooltip state
     const [tooltip, setTooltip] = useState<{
@@ -113,108 +99,43 @@ export function TimelineChart({
     // Base chart width (before zoom)
     const chartWidth = Math.max(800, (layout.maxYear - layout.minYear) * 8);
 
+    // Pan/zoom via shared hook
+    const {
+        scale,
+        containerRef,
+        containerProps,
+        svgStyle,
+        scaledWidth,
+        scaledHeight,
+        zoomIn: handleZoomIn,
+        zoomOut: handleZoomOut,
+        fit: handleFit,
+        centerOn,
+        wasRecentlyPanning,
+    } = usePanZoom({
+        contentWidth: chartWidth,
+        contentHeight: totalContentHeight,
+        minScale: 0.5,
+        maxScale: 3.0,
+        fitPadding: 40,
+    });
+
     // Time ticks
     const timeTicks = useMemo(() => 
         generateTimeTicks(layout.minYear, layout.maxYear, 15),
         [layout.minYear, layout.maxYear]
     );
 
-    // Zoom handlers
-    const clampScale = (nextScale: number) => Math.min(3, Math.max(0.5, nextScale));
-
-    const applyScale = useCallback((nextScale: number) => {
-        const container = containerRef.current;
-        if (!container) return;
-        const prevScale = scale;
-        const centerX = container.scrollLeft + container.clientWidth / 2;
-        const centerY = container.scrollTop + container.clientHeight / 2;
-        const ratio = nextScale / prevScale;
-        setScale(nextScale);
-        requestAnimationFrame(() => {
-            container.scrollLeft = centerX * ratio - container.clientWidth / 2;
-            container.scrollTop = centerY * ratio - container.clientHeight / 2;
-        });
-    }, [scale]);
-
-    const handleZoomIn = () => applyScale(clampScale(scale + 0.15));
-    const handleZoomOut = () => applyScale(clampScale(scale - 0.15));
-
-    const handleFit = () => {
-        const container = containerRef.current;
-        if (!container) return;
-        const padding = 40;
-        const availableWidth = Math.max(container.clientWidth - padding, 1);
-        const availableHeight = Math.max(container.clientHeight - padding, 1);
-        const nextScale = clampScale(Math.min(
-            availableWidth / chartWidth,
-            availableHeight / totalContentHeight
-        ));
-        setScale(nextScale);
-        requestAnimationFrame(() => {
-            container.scrollLeft = (chartWidth * nextScale - container.clientWidth) / 2;
-            container.scrollTop = 0;
-        });
-    };
-
+    // Center on current year
     const handleCenter = () => {
-        const container = containerRef.current;
-        if (!container) return;
         const currentYear = new Date().getFullYear();
         const targetX = yearToX(currentYear, layout.minYear, layout.maxYear, chartWidth, PADDING_X);
-        container.scrollLeft = targetX * scale - container.clientWidth / 2;
-    };
-
-    // Pan handlers - support both X and Y panning
-    const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-        if (event.button !== 0) return;
-        const container = event.currentTarget;
-        panState.current = {
-            startX: event.clientX,
-            startY: event.clientY,
-            scrollLeft: container.scrollLeft,
-            scrollTop: container.scrollTop,
-            moved: false,
-            lastPanAt: panState.current.lastPanAt,
-            isPointerDown: true,
-            isPanning: false,
-        };
-    };
-
-    const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-        const container = event.currentTarget;
-        if (!panState.current.isPointerDown) return;
-        const deltaX = event.clientX - panState.current.startX;
-        const deltaY = event.clientY - panState.current.startY;
-        const movedEnough = Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4;
-        if (!panState.current.isPanning && movedEnough) {
-            panState.current.moved = true;
-            panState.current.isPanning = true;
-            setIsPanning(true);
-            container.setPointerCapture?.(event.pointerId);
-        }
-        if (!panState.current.isPanning) return;
-        event.preventDefault();
-        container.scrollLeft = panState.current.scrollLeft - deltaX;
-        container.scrollTop = panState.current.scrollTop - deltaY;
-    };
-
-    const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-        const container = event.currentTarget;
-        if (panState.current.isPanning && container.hasPointerCapture?.(event.pointerId)) {
-            container.releasePointerCapture(event.pointerId);
-        }
-        setIsPanning(false);
-        panState.current.isPanning = false;
-        panState.current.isPointerDown = false;
-        if (panState.current.moved) {
-            panState.current.lastPanAt = Date.now();
-        }
-        panState.current.moved = false;
+        centerOn(targetX, totalContentHeight / 2);
     };
 
     // Click handlers
     const handlePersonClick = (personId: Id<"people">) => {
-        if (Date.now() - panState.current.lastPanAt < 200) return;
+        if (wasRecentlyPanning()) return;
         navigate(`/tree/${treeId}/person/${personId}`);
     };
 
@@ -400,6 +321,11 @@ export function TimelineChart({
             tooltipLines.push('(Child of focused)');
         }
 
+        // Check if text fits inside the bar (approximate)
+        // Assuming ~7px per character on average
+        const nameWidth = personBar.fullName.length * 7;
+        const textFitsInside = nameWidth + 12 < width; // 12px for padding
+
         return (
             <g
                 key={personBar.id}
@@ -426,11 +352,11 @@ export function TimelineChart({
                     strokeWidth={isFocused ? 2 : 0}
                 />
                 <text
-                    x={x1 + 6}
+                    x={textFitsInside ? x1 + 6 : x1 + width + 6}
                     y={y + PERSON_BAR_HEIGHT / 2 + 4}
                     fontSize="12"
                     fontWeight="500"
-                    fill="#ffffff"
+                    fill={textFitsInside ? '#ffffff' : 'var(--color-text-primary)'}
                     style={{ pointerEvents: 'none' }}
                 >
                     {personBar.fullName}
@@ -683,20 +609,11 @@ export function TimelineChart({
             <div
                 ref={containerRef}
                 className="flex-1 overflow-auto"
-                style={{ 
-                    cursor: isPanning ? 'grabbing' : 'grab', 
-                    touchAction: 'none', 
-                    minHeight: 0, 
-                    userSelect: 'none' 
-                }}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
+                {...containerProps}
             >
                 <div style={{ 
-                    width: chartWidth * scale, 
-                    height: totalContentHeight * scale, 
+                    width: scaledWidth, 
+                    height: scaledHeight, 
                     display: 'inline-block', 
                     overflow: 'hidden' 
                 }}>
@@ -704,7 +621,7 @@ export function TimelineChart({
                         ref={svgRef}
                         width={chartWidth}
                         height={totalContentHeight}
-                        style={{ transform: `scale(${scale})`, transformOrigin: 'top left', overflow: 'visible' }}
+                        style={{ ...svgStyle, overflow: 'visible' }}
                     >
                         {/* Background grid lines */}
                         <g className="grid-lines">

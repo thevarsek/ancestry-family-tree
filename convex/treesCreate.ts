@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireUser } from "./lib/auth";
+import { insertAuditLog } from "./lib/auditLog";
 
 export const create = mutation({
     args: {
@@ -30,13 +31,13 @@ export const create = mutation({
             joinedAt: now
         });
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId,
             userId: user._id,
             action: "tree_created",
             entityType: "tree",
             entityId: treeId,
-            timestamp: now
+            timestamp: now,
         });
 
         return treeId;

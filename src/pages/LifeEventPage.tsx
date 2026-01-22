@@ -15,6 +15,7 @@ import { getClaimTitle, sortClaimsForTimeline } from '../utils/claimSorting';
 type ClaimWithDetails = Doc<"claims"> & {
     place?: Doc<"places"> | null;
     sources?: Doc<"sources">[];
+    relatedPeople?: Doc<"people">[];
 };
 
 type MediaWithUrl = Doc<"media"> & { storageUrl?: string | null };
@@ -154,6 +155,30 @@ export function LifeEventPage() {
                                     {place?.displayName ?? 'No place recorded'}
                                 </div>
                             </div>
+                            {(resolvedClaim.claimType === 'marriage' || resolvedClaim.claimType === 'divorce') && (
+                                <div>
+                                    <div className="text-xs uppercase tracking-wide text-muted">
+                                        {resolvedClaim.claimType === 'marriage' ? 'Partner' : 'Other People'}
+                                    </div>
+                                    <div className="font-medium">
+                                        {resolvedClaim.relatedPeople && resolvedClaim.relatedPeople.length > 0 ? (
+                                            resolvedClaim.relatedPeople.map((person, index) => (
+                                                <span key={person._id}>
+                                                    <Link
+                                                        to={`/tree/${treeId}/person/${person._id}`}
+                                                        className="hover:text-accent"
+                                                    >
+                                                        {person.givenNames} {person.surnames}
+                                                    </Link>
+                                                    {index < resolvedClaim.relatedPeople!.length - 1 && ', '}
+                                                </span>
+                                            ))
+                                        ) : (
+                                            'No partner recorded'
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div>
                             <div className="text-xs uppercase tracking-wide text-muted">Description</div>

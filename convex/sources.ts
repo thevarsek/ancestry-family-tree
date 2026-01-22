@@ -1,6 +1,7 @@
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireTreeAccess, requireTreeAdmin } from "./lib/auth";
+import { insertAuditLog } from "./lib/auditLog";
 import { Id } from "./_generated/dataModel";
 
 // List sources for a tree
@@ -162,7 +163,7 @@ export const create = mutation({
                 createdAt: now,
             });
 
-            await ctx.db.insert("auditLog", {
+            await insertAuditLog(ctx, {
                 treeId: args.treeId,
                 userId,
                 action: "source_linked",
@@ -231,7 +232,7 @@ export const update = mutation({
             });
         }
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: source.treeId,
             userId,
             action: "source_updated",
@@ -296,7 +297,7 @@ export const remove = mutation({
 
         await ctx.db.delete(args.sourceId);
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: source.treeId,
             userId,
             action: "source_deleted",

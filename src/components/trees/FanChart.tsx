@@ -1,6 +1,7 @@
-import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { usePanZoom } from '../../hooks/usePanZoom';
 import { exportSvgChart, type ChartExportFormat } from './chartExport';
 import { buildFanChartLayout } from './fanChartLayout';
 
@@ -159,23 +160,10 @@ export function FanChart({
     onToggleFullscreen,
 }: FanChartProps) {
     const navigate = useNavigate();
-    const containerRef = useRef<HTMLDivElement | null>(null);
     const svgRef = useRef<SVGSVGElement | null>(null);
     const contentRef = useRef<HTMLDivElement | null>(null);
-    const [scale, setScale] = useState(1);
-    const [isPanning, setIsPanning] = useState(false);
     const [resizeTick, setResizeTick] = useState(0);
     const hasCenteredRef = useRef(false);
-    const panState = useRef({
-        startX: 0,
-        startY: 0,
-        scrollLeft: 0,
-        scrollTop: 0,
-        moved: false,
-        lastPanAt: 0,
-        isPointerDown: false,
-        isPanning: false,
-    });
 
     const layout = useMemo(() => buildFanChartLayout({
         people,
@@ -201,6 +189,27 @@ export function FanChart({
     const rootLines = wrapLabelText(rootLabel, rootMaxChars, 2);
     const rootOffset = -((rootLines.length - 1) * 0.55);
 
+    // Pan/zoom via shared hook
+    const {
+        scale,
+        containerRef,
+        containerProps,
+        svgStyle,
+        scaledWidth,
+        scaledHeight,
+        zoomIn: handleZoomIn,
+        zoomOut: handleZoomOut,
+        fit: handleFit,
+        center: handleCenter,
+        wasRecentlyPanning,
+    } = usePanZoom({
+        contentWidth: chartSize,
+        contentHeight: chartSize,
+        minScale: 0.6,
+        maxScale: 2.25,
+        fitPadding: 80,
+    });
+
     useLayoutEffect(() => {
         hasCenteredRef.current = false;
     }, [rootPersonId, chartSize]);
@@ -224,7 +233,7 @@ export function FanChart({
         };
 
         requestAnimationFrame(centerView);
-    }, [chartSize, scale, rootPersonId, resizeTick]);
+    }, [chartSize, scale, rootPersonId, resizeTick, containerRef]);
 
     useLayoutEffect(() => {
         const container = containerRef.current;
@@ -235,98 +244,11 @@ export function FanChart({
         });
         observer.observe(container);
         return () => observer.disconnect();
-    }, []);
-
-    const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-        if (event.button !== 0) return;
-        const container = event.currentTarget;
-        panState.current = {
-            startX: event.clientX,
-            startY: event.clientY,
-            scrollLeft: container.scrollLeft,
-            scrollTop: container.scrollTop,
-            moved: false,
-            lastPanAt: panState.current.lastPanAt,
-            isPointerDown: true,
-            isPanning: false,
-        };
-    };
-
-    const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
-        const container = event.currentTarget;
-        if (!panState.current.isPointerDown) return;
-        const deltaX = event.clientX - panState.current.startX;
-        const deltaY = event.clientY - panState.current.startY;
-        const movedEnough = Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4;
-        if (!panState.current.isPanning && movedEnough) {
-            panState.current.moved = true;
-            panState.current.isPanning = true;
-            setIsPanning(true);
-            container.setPointerCapture?.(event.pointerId);
-        }
-        if (!panState.current.isPanning) return;
-        event.preventDefault();
-        container.scrollLeft = panState.current.scrollLeft - deltaX;
-        container.scrollTop = panState.current.scrollTop - deltaY;
-    };
-
-    const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
-        const container = event.currentTarget;
-        if (panState.current.isPanning && container.hasPointerCapture?.(event.pointerId)) {
-            container.releasePointerCapture(event.pointerId);
-        }
-        setIsPanning(false);
-        panState.current.isPanning = false;
-        panState.current.isPointerDown = false;
-        if (panState.current.moved) {
-            panState.current.lastPanAt = Date.now();
-        }
-        panState.current.moved = false;
-    };
+    }, [containerRef]);
 
     const handleNodeClick = (personId: Id<"people">) => {
-        if (Date.now() - panState.current.lastPanAt < 200) return;
+        if (wasRecentlyPanning()) return;
         navigate(`/tree/${treeId}/person/${personId}`);
-    };
-
-    const clampScale = (nextScale: number) => Math.min(2.25, Math.max(0.6, nextScale));
-
-    const applyScale = (nextScale: number) => {
-        const container = containerRef.current;
-        if (!container) return;
-        const prevScale = scale;
-        const centerX = container.scrollLeft + container.clientWidth / 2;
-        const centerY = container.scrollTop + container.clientHeight / 2;
-        const ratio = nextScale / prevScale;
-        setScale(nextScale);
-        requestAnimationFrame(() => {
-            container.scrollLeft = centerX * ratio - container.clientWidth / 2;
-            container.scrollTop = centerY * ratio - container.clientHeight / 2;
-        });
-    };
-
-    const handleZoomIn = () => applyScale(clampScale(scale + 0.15));
-    const handleZoomOut = () => applyScale(clampScale(scale - 0.15));
-
-    const handleFit = () => {
-        const container = containerRef.current;
-        if (!container) return;
-        const paddingSpace = 80;
-        const availableWidth = Math.max(container.clientWidth - paddingSpace, 1);
-        const availableHeight = Math.max(container.clientHeight - paddingSpace, 1);
-        const nextScale = clampScale(Math.min(availableWidth / chartSize, availableHeight / chartSize));
-        setScale(nextScale);
-        requestAnimationFrame(() => {
-            container.scrollLeft = (chartSize * nextScale - container.clientWidth) / 2;
-            container.scrollTop = (chartSize * nextScale - container.clientHeight) / 2;
-        });
-    };
-
-    const handleCenter = () => {
-        const container = containerRef.current;
-        if (!container) return;
-        container.scrollLeft = (chartSize * scale - container.clientWidth) / 2;
-        container.scrollTop = (chartSize * scale - container.clientHeight) / 2;
     };
 
     const handleExport = async (format: ChartExportFormat) => {
@@ -371,19 +293,15 @@ export function FanChart({
             <div
                 ref={containerRef}
                 className="flex-1 overflow-auto fan-chart-scroll"
-                style={{ cursor: isPanning ? 'grabbing' : 'grab', touchAction: 'none', minHeight: 0, userSelect: 'none' }}
                 data-testid="fan-chart-scroll"
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
+                {...containerProps}
             >
                 <div className="fan-chart-canvas">
                     <div
                         ref={contentRef}
                         style={{
-                            width: chartSize * scale,
-                            height: chartSize * scale,
+                            width: scaledWidth,
+                            height: scaledHeight,
                             display: 'inline-block',
                             overflow: 'hidden',
                         }}
@@ -393,7 +311,7 @@ export function FanChart({
                             width={chartSize}
                             height={chartSize}
                             className="fan-chart-svg"
-                            style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
+                            style={svgStyle}
                         >
                         <defs>
                             <linearGradient id="fan-chart-root" x1="0%" y1="0%" x2="100%" y2="100%">

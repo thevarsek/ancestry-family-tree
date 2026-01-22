@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireTreeAdmin } from "./lib/auth";
+import { insertAuditLog } from "./lib/auditLog";
 
 /**
  * Create a new relationship
@@ -64,7 +65,7 @@ export const create = mutation({
             createdAt: now,
         });
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: args.treeId,
             userId,
             action: "relationship_created",
@@ -93,7 +94,7 @@ export const remove = mutation({
 
         await ctx.db.delete(args.relationshipId);
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: relationship.treeId,
             userId,
             action: "relationship_deleted",
@@ -104,7 +105,6 @@ export const remove = mutation({
                 p1: relationship.personId1,
                 p2: relationship.personId2,
             },
-            timestamp: Date.now(),
         });
 
         return args.relationshipId;

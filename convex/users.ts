@@ -1,6 +1,7 @@
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireUser, getCurrentUser } from "./lib/auth";
+import { insertAuditLog } from "./lib/auditLog";
 import type { Id } from "./_generated/dataModel";
 
 export const acceptPendingInvitations = async (
@@ -40,13 +41,13 @@ export const acceptPendingInvitations = async (
                 joinedAt: now
             });
 
-            await ctx.db.insert("auditLog", {
+            await insertAuditLog(ctx, {
                 treeId: invitation.treeId,
                 userId,
                 action: "invitation_accepted",
-                entityType: "invitation",
+                entityType: "treeInvitation",
                 entityId: invitation._id,
-                timestamp: now
+                timestamp: now,
             });
         }
 

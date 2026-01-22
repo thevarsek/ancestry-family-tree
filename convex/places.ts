@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { requireTreeAccess, requireTreeAdmin } from "./lib/auth";
+import { insertAuditLog } from "./lib/auditLog";
 
 /**
  * List all places in a tree
@@ -129,7 +130,7 @@ export const create = mutation({
             updatedAt: now,
         });
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: args.treeId,
             userId,
             action: "place_created",
@@ -207,7 +208,7 @@ export const update = mutation({
             });
         }
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: place.treeId,
             userId,
             action: "place_updated",

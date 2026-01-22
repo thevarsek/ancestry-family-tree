@@ -146,6 +146,78 @@ function packIntoRows<T extends { startYear: number; endYear: number | null }>(
 }
 
 /**
+ * Pack event items with text labels into rows to avoid overlaps.
+ * Accounts for the text label width that extends beyond the marker.
+ */
+function packEventsIntoRows(events: TimelineEventBar[]): Map<number, number> {
+    const rowAssignments = new Map<number, number>();
+    const rows: Array<{ end: number }[]> = [];
+    
+    // Sort by start year
+    const sortedIndices = events
+        .map((_, i) => i)
+        .sort((a, b) => events[a].startYear - events[b].startYear);
+    
+    // Estimate years needed for text label
+    // At typical zoom (8px per year), 11px font is ~6.5px per character
+    // We need to account for the description text that follows the title
+    const DESCRIPTION_MAX_CHARS = 50;
+    const estimateLabelWidth = (title: string, description?: string): number => {
+        let totalChars = title.length;
+        if (description) {
+            // Add " - " separator (3 chars) plus truncated description
+            const descLength = Math.min(description.length, DESCRIPTION_MAX_CHARS);
+            totalChars += 3 + descLength;
+        }
+        // Use a conservative ratio: ~3 characters per year to prevent overlapping
+        return Math.ceil(totalChars / 3);
+    };
+    
+    for (const idx of sortedIndices) {
+        const event = events[idx];
+        const isPointEvent = event.endYear === null || event.endYear === event.startYear;
+        
+        // For point events, the label extends to the right, so add label width
+        // For range events, the label also extends beyond the bar, so account for it
+        const labelWidth = estimateLabelWidth(event.title, event.description);
+        let itemEnd: number;
+        
+        if (isPointEvent) {
+            // Point events: label starts right after the diamond marker
+            itemEnd = event.startYear + labelWidth;
+        } else {
+            // Range events: label may extend beyond the bar
+            const barEnd = event.endYear ?? event.startYear;
+            itemEnd = Math.max(barEnd, event.startYear + labelWidth);
+        }
+        
+        // Find the first row where this item fits
+        let assignedRow = -1;
+        const gap = 3; // Minimum gap in years (increased for better spacing)
+        
+        for (let r = 0; r < rows.length; r++) {
+            const rowItems = rows[r];
+            const maxEndInRow = Math.max(...rowItems.map(ri => ri.end), -Infinity);
+            if (event.startYear > maxEndInRow + gap) {
+                assignedRow = r;
+                break;
+            }
+        }
+        
+        if (assignedRow === -1) {
+            // Need a new row
+            assignedRow = rows.length;
+            rows.push([]);
+        }
+        
+        rows[assignedRow].push({ end: itemEnd });
+        rowAssignments.set(idx, assignedRow);
+    }
+    
+    return rowAssignments;
+}
+
+/**
  * Build the timeline layout from input data
  */
 export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout {
@@ -186,6 +258,50 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
         });
     }
     
+    // Add birth and death events from people to the events section
+    for (const person of people) {
+        // Skip if person is not visible
+        if (!visiblePersonIds.has(person._id)) continue;
+        
+        const fullName = [person.givenNames, person.surnames].filter(Boolean).join(' ') || 'Unknown';
+        
+        // Add birth event
+        const birthYear = parseYear(person.birthDate);
+        if (birthYear !== null && visibleEventTypes.has('birth')) {
+            processedEvents.push({
+                id: `${person._id}-birth` as Id<"claims">,
+                claim: null as unknown as LifeEventClaim, // Not from a claim
+                title: `Birth - ${fullName}`,
+                description: undefined,
+                startYear: birthYear,
+                endYear: null, // Point event
+                isOngoing: false,
+                row: 0,
+                personId: person._id,
+                personName: fullName,
+                claimType: 'birth',
+            });
+        }
+        
+        // Add death event
+        const deathYear = parseYear(person.deathDate);
+        if (deathYear !== null && visibleEventTypes.has('death')) {
+            processedEvents.push({
+                id: `${person._id}-death` as Id<"claims">,
+                claim: null as unknown as LifeEventClaim, // Not from a claim
+                title: `Death - ${fullName}`,
+                description: undefined,
+                startYear: deathYear,
+                endYear: null, // Point event
+                isOngoing: false,
+                row: 0,
+                personId: person._id,
+                personName: fullName,
+                claimType: 'death',
+            });
+        }
+    }
+    
     // Process people
     const processedPeople: TimelinePersonBar[] = [];
     
@@ -216,8 +332,25 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
         });
     }
     
-    // Pack events into rows (minimal rows needed)
-    const eventRowMap = packIntoRows(processedEvents, 2);
+    // Calculate initial time range for packing events with label considerations
+    const allStartYears = [
+        ...processedEvents.map(e => e.startYear),
+        ...processedPeople.map(p => p.startYear),
+    ];
+    const allEndYears = [
+        ...processedEvents.map(e => e.endYear ?? e.startYear),
+        ...processedPeople.map(p => p.endYear),
+    ];
+    
+    const initialMinYear = allStartYears.length > 0 
+        ? Math.min(...allStartYears) 
+        : currentYear - 100;
+    const initialMaxYear = allEndYears.length > 0 
+        ? Math.max(...allEndYears, currentYear) 
+        : currentYear;
+    
+    // Pack events into rows (accounting for text label width)
+    const eventRowMap = packEventsIntoRows(processedEvents);
     for (let i = 0; i < processedEvents.length; i++) {
         processedEvents[i].row = eventRowMap.get(i) ?? 0;
     }
@@ -234,28 +367,14 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
         ? Math.max(...Array.from(personRowMap.values())) + 1 
         : 0;
     
-    // Calculate time range
-    const allStartYears = [
-        ...processedEvents.map(e => e.startYear),
-        ...processedPeople.map(p => p.startYear),
-    ];
-    const allEndYears = [
-        ...processedEvents.map(e => e.endYear ?? e.startYear),
-        ...processedPeople.map(p => p.endYear),
-    ];
-    
-    const minYear = allStartYears.length > 0 
-        ? Math.min(...allStartYears) 
-        : currentYear - 100;
-    const maxYear = allEndYears.length > 0 
-        ? Math.max(...allEndYears, currentYear) 
-        : currentYear;
+    // Add 25 years to the future for better readability of names at the edge
+    const futureBuffer = 25;
     
     return {
         events: processedEvents,
         people: processedPeople,
-        minYear: Math.floor(minYear / 10) * 10, // Round down to decade
-        maxYear: Math.ceil(maxYear / 10) * 10, // Round up to decade
+        minYear: Math.floor(initialMinYear / 10) * 10, // Round down to decade
+        maxYear: Math.ceil((initialMaxYear + futureBuffer) / 10) * 10, // Round up to decade, add buffer
         eventRowCount,
         personRowCount,
         relationships,

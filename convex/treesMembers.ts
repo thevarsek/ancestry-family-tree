@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireTreeAccess, requireTreeAdmin } from "./lib/auth";
+import { insertAuditLog } from "./lib/auditLog";
 
 export const getMembers = query({
     args: { treeId: v.id("trees") },
@@ -58,14 +59,13 @@ export const updateMemberRole = mutation({
 
         await ctx.db.patch(membership._id, { role: args.role });
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: args.treeId,
             userId: adminId,
             action: "member_role_updated",
             entityType: "treeMembership",
             entityId: membership._id,
             changes: { role: args.role },
-            timestamp: Date.now()
         });
 
         return membership._id;
@@ -97,13 +97,12 @@ export const removeMember = mutation({
 
         await ctx.db.delete(membership._id);
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: args.treeId,
             userId: adminId,
             action: "member_removed",
             entityType: "treeMembership",
             entityId: membership._id,
-            timestamp: Date.now()
         });
 
         return args.treeId;

@@ -2,6 +2,7 @@ import { action, mutation, query, QueryCtx, MutationCtx, ActionCtx } from "./_ge
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { requireTreeAdmin, requireUser } from "./lib/auth";
+import { insertAuditLog } from "./lib/auditLog";
 import type { Id } from "./_generated/dataModel";
 
 const clerkInvitationEndpoint = "https://api.clerk.com/v1/invitations";
@@ -103,14 +104,14 @@ export const createInvitation = mutation({
             expiresAt: now + 7 * 24 * 60 * 60 * 1000
         });
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: args.treeId,
             userId,
             action: "invitation_sent",
-            entityType: "invitation",
+            entityType: "treeInvitation",
             entityId: invitationId,
             changes: { email: args.email, role: args.role },
-            timestamp: now
+            timestamp: now,
         });
 
         return { invitationId, token };
@@ -177,13 +178,13 @@ export const acceptInvitation = mutation({
 
         await ctx.db.patch(invitation._id, { acceptedAt: now });
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: invitation.treeId,
             userId: user._id,
             action: "invitation_accepted",
-            entityType: "invitation",
+            entityType: "treeInvitation",
             entityId: invitation._id,
-            timestamp: now
+            timestamp: now,
         });
 
         return invitation.treeId;
@@ -235,13 +236,12 @@ export const deleteInvitation = mutation({
 
         await ctx.db.delete(args.invitationId);
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: args.treeId,
             userId,
             action: "invitation_cancelled",
-            entityType: "invitation",
+            entityType: "treeInvitation",
             entityId: args.invitationId,
-            timestamp: Date.now()
         });
 
         return args.treeId;

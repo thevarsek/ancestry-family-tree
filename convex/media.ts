@@ -4,6 +4,7 @@ import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { requireTreeAccess, requireTreeAdmin, requireUser } from "./lib/auth";
+import { insertAuditLog } from "./lib/auditLog";
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
@@ -362,13 +363,13 @@ export const create = mutation({
             });
         }
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: args.treeId,
             userId,
             action: "media_created",
             entityType: "media",
             entityId: mediaId,
-            timestamp: now
+            timestamp: now,
         });
 
         return mediaId;
@@ -625,13 +626,13 @@ export const remove = mutation({
 
         await ctx.db.delete(args.mediaId);
 
-        await ctx.db.insert("auditLog", {
+        await insertAuditLog(ctx, {
             treeId: media.treeId,
             userId,
             action: "media_deleted",
             entityType: "media",
             entityId: args.mediaId,
-            timestamp: now
+            timestamp: now,
         });
 
         return args.mediaId;
