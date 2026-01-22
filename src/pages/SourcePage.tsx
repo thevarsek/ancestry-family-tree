@@ -155,7 +155,7 @@ export function SourcePage() {
                         {sortedClaims.length === 0 ? (
                             <p className="text-sm text-muted">No events linked to this source yet.</p>
                         ) : (
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 {sortedClaims.map((claim) => {
                                     const claimTitle = getClaimTitle(claim);
                                     const claimDate = formatClaimDate(claim.value) || 'Unknown date';
@@ -164,35 +164,32 @@ export function SourcePage() {
                                         ? `/tree/${treeId}/person/${claimPerson._id}/event/${claim._id}`
                                         : undefined;
 
-                                    const content = (
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div>
-                                                <div className="font-semibold capitalize">{claimTitle}</div>
-                                                <div className="text-xs text-muted">{claimDate}</div>
-                                                {claimPerson && (
-                                                    <div className="text-xs text-muted">
-                                                        {claimPerson.givenNames} {claimPerson.surnames}
-                                                    </div>
-                                                )}
-                                                {claim.place?.displayName && (
-                                                    <div className="text-xs text-muted">{claim.place.displayName}</div>
-                                                )}
+                                    return (
+                                        <div key={claim._id} className="flex gap-4">
+                                            <div className="flex-1 pb-4 border-l border-border-subtle pl-4 relative">
+                                                <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-border" />
+                                                <div>
+                                                    {linkTarget ? (
+                                                        <Link
+                                                            to={linkTarget}
+                                                            className="font-medium hover:text-accent capitalize"
+                                                        >
+                                                            {claimTitle}
+                                                        </Link>
+                                                    ) : (
+                                                        <span className="font-medium capitalize">{claimTitle}</span>
+                                                    )}
+                                                    <p className="text-sm text-muted">{claimDate}</p>
+                                                    {claimPerson && (
+                                                        <p className="text-sm text-muted">
+                                                            {claimPerson.givenNames} {claimPerson.surnames}
+                                                        </p>
+                                                    )}
+                                                    {claim.place?.displayName && (
+                                                        <p className="text-sm text-muted">{claim.place.displayName}</p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <span className="badge badge-neutral capitalize">Event</span>
-                                        </div>
-                                    );
-
-                                    return linkTarget ? (
-                                        <Link
-                                            key={claim._id}
-                                            to={linkTarget}
-                                            className="card p-4 hover:shadow-md transition-shadow"
-                                        >
-                                            {content}
-                                        </Link>
-                                    ) : (
-                                        <div key={claim._id} className="card p-4">
-                                            {content}
                                         </div>
                                     );
                                 })}

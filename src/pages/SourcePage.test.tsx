@@ -111,6 +111,6 @@ describe('SourcePage', () => {
 
         expect(screen.getByRole('heading', { name: /marriage certificate/i })).toBeInTheDocument();
         expect(screen.getByText(/linked events/i)).toBeInTheDocument();
-        expect(screen.getByText('marriage', { selector: 'div' })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /marriage/i })).toBeInTheDocument();
     });
 });
