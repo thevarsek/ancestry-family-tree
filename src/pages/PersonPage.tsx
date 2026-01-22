@@ -58,6 +58,39 @@ export function PersonPage() {
         person?.profilePhotoId ? { mediaId: person.profilePhotoId } : "skip"
     );
 
+    const relationshipPeople = useMemo(() => {
+        if (!relationships) return [];
+        return relationships.parents
+            .concat(relationships.spouses)
+            .concat(relationships.siblings)
+            .concat(relationships.children)
+            .map((relation) => relation.person)
+            .filter((relationPerson): relationPerson is Doc<"people"> => Boolean(relationPerson));
+    }, [relationships]);
+
+    const relationshipPhotoIds = useMemo(() => {
+        const ids = relationshipPeople
+            .map((relationPerson) => relationPerson.profilePhotoId)
+            .filter((id): id is Id<"media"> => Boolean(id));
+        return Array.from(new Set(ids));
+    }, [relationshipPeople]);
+
+    const relationshipPhotos = useQuery(
+        api.media.getUrls,
+        relationshipPhotoIds.length ? { mediaIds: relationshipPhotoIds } : "skip"
+    );
+
+    const relationshipPhotoMap = useMemo(() => {
+        return new Map((relationshipPhotos ?? []).map((item) => [item.mediaId, item]));
+    }, [relationshipPhotos]);
+
+    const getRelationshipPhoto = useMemo(() => {
+        return (relationPerson?: Doc<"people"> | null) => {
+            if (!relationPerson?.profilePhotoId) return undefined;
+            return relationshipPhotoMap.get(relationPerson.profilePhotoId);
+        };
+    }, [relationshipPhotoMap]);
+
     const residenceClaims = useMemo(() => {
         if (!person) return [];
         return (person.claims as PersonClaim[]).filter(
@@ -326,13 +359,28 @@ export function PersonPage() {
                                     ) : (
                                         <>
                                             {relationships.parents.map((r) => (
-                                                <RelationshipCard key={r.relationship._id} relationship={r.relationship} person={r.person} />
+                                                <RelationshipCard
+                                                    key={r.relationship._id}
+                                                    relationship={r.relationship}
+                                                    person={r.person}
+                                                    profilePhoto={getRelationshipPhoto(r.person)}
+                                                />
                                             ))}
                                             {relationships.spouses.map((r) => (
-                                                <RelationshipCard key={r.relationship._id} relationship={r.relationship} person={r.person} />
+                                                <RelationshipCard
+                                                    key={r.relationship._id}
+                                                    relationship={r.relationship}
+                                                    person={r.person}
+                                                    profilePhoto={getRelationshipPhoto(r.person)}
+                                                />
                                             ))}
                                             {relationships.children.map((r) => (
-                                                <RelationshipCard key={r.relationship._id} relationship={r.relationship} person={r.person} />
+                                                <RelationshipCard
+                                                    key={r.relationship._id}
+                                                    relationship={r.relationship}
+                                                    person={r.person}
+                                                    profilePhoto={getRelationshipPhoto(r.person)}
+                                                />
                                             ))}
                                         </>
                                     )}
@@ -440,6 +488,7 @@ export function PersonPage() {
                                                         key={r.relationship._id}
                                                         relationship={r.relationship}
                                                         person={r.person}
+                                                        profilePhoto={getRelationshipPhoto(r.person)}
                                                         onDelete={handleDeleteRelationship}
                                                         roleLabel={roleLabel}
                                                     />

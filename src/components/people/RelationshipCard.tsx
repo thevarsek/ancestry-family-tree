@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { ProfilePhoto } from './ProfilePhoto';
 
 type RelationshipStatus = 'current' | 'divorced' | 'separated' | 'widowed' | 'ended';
 
@@ -14,11 +15,18 @@ const relationshipStatusConfig: Record<RelationshipStatus, { label: string; tone
 export function RelationshipCard({
     relationship,
     person,
+    profilePhoto,
     onDelete,
     roleLabel
 }: {
     relationship: Doc<"relationships">;
     person?: Doc<"people"> | null;
+    profilePhoto?: {
+        storageUrl?: string | null;
+        zoomLevel?: number;
+        focusX?: number;
+        focusY?: number;
+    };
     onDelete?: (id: Id<"relationships">) => void;
     roleLabel?: string;
 }) {
@@ -33,8 +41,18 @@ export function RelationshipCard({
     return (
         <div className="card p-3 flex items-center justify-between group">
             <div className="flex items-center gap-3">
-                <div className="avatar">
-                    <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>
+                <div className="avatar overflow-hidden">
+                    {profilePhoto?.storageUrl ? (
+                        <ProfilePhoto
+                            src={profilePhoto.storageUrl}
+                            alt={`${person.givenNames ?? ''} ${person.surnames ?? ''}`}
+                            zoomLevel={profilePhoto.zoomLevel}
+                            focusX={profilePhoto.focusX}
+                            focusY={profilePhoto.focusY}
+                        />
+                    ) : (
+                        <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>
+                    )}
                 </div>
                 <div>
                     <div className="font-semibold">
