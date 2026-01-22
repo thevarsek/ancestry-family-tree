@@ -154,9 +154,19 @@ export function PedigreeChart({
     const spouseLinks = chartData.links.filter(link => link.type === 'spouse');
     const parentLinks = chartData.links.filter(link => link.type === 'parent');
     const chartHeight = typeof height === 'number' ? `${height}px` : height;
+    // For percentage-based heights (like "100%"), we need flex to properly fill the space
+    const useFlexGrow = height === '100%';
 
     return (
-        <div className="card p-4 flex flex-col" style={{ height: chartHeight, overflow: 'hidden' }}>
+        <div 
+            className="card p-4 flex flex-col" 
+            style={{ 
+                height: useFlexGrow ? undefined : chartHeight,
+                flex: useFlexGrow ? 1 : undefined,
+                minHeight: useFlexGrow ? 0 : undefined,
+                overflow: 'hidden' 
+            }}
+        >
             <div
                 className="flex items-center justify-between mb-3 text-xs text-muted"
                 onPointerDown={(event) => event.stopPropagation()}

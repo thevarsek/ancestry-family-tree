@@ -268,7 +268,8 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
 
     return (
         <>
-            <div className="space-y-6">
+            {/* Hide background content when fullscreen to prevent event conflicts */}
+            <div className="space-y-6" style={isFullscreen ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}>
                 {renderChartControls()}
                 {chartBody}
             </div>
@@ -289,10 +290,10 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
                             <h3 className="modal-title">{chartConfig.label} Chart</h3>
                             <button className="btn btn-ghost btn-sm" onClick={() => setIsFullscreen(false)}>Close</button>
                         </div>
-                        <div className="modal-body" style={{ maxHeight: 'none', overflow: 'hidden' }}>
-                            <div className="flex flex-col gap-4 h-full">
+                        <div className="modal-body" style={{ flex: 1, maxHeight: 'none', overflow: 'hidden', padding: 0, minHeight: 0 }}>
+                            <div className="flex flex-col gap-4 p-6" style={{ height: '100%' }}>
                                 {renderChartControls()}
-                                <div className="flex-1 min-h-0">
+                                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                                     {rootPersonId && activeChart === 'family-tree' && (
                                         <PedigreeChart
                                             treeId={treeId}

@@ -569,6 +569,8 @@ export function TimelineChart({
     };
 
     const chartHeight = typeof height === 'number' ? `${height}px` : height;
+    // For percentage-based heights (like "100%"), we need flex to properly fill the space
+    const useFlexGrow = height === '100%';
 
     // No data message
     if (layout.people.length === 0 && layout.events.length === 0) {
@@ -580,7 +582,15 @@ export function TimelineChart({
     }
 
     return (
-        <div className="card p-4 flex flex-col" style={{ height: chartHeight, overflow: 'hidden' }}>
+        <div 
+            className="card p-4 flex flex-col" 
+            style={{ 
+                height: useFlexGrow ? undefined : chartHeight,
+                flex: useFlexGrow ? 1 : undefined,
+                minHeight: useFlexGrow ? 0 : undefined,
+                overflow: 'hidden' 
+            }}
+        >
             {/* Control bar */}
             <div
                 className="flex items-center justify-between mb-3 text-xs text-muted"
