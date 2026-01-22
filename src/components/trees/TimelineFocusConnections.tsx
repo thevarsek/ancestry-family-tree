@@ -163,5 +163,5 @@ export function TimelineFocusConnections({
         );
     }
 
-    return <g className="focus-connections">{connections}</g>;
+    return <g className="focus-connections" style={{ pointerEvents: 'none' }}>{connections}</g>;
 }

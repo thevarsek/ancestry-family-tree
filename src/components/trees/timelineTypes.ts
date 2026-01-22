@@ -27,6 +27,10 @@ export interface TimelinePersonBar {
     fullName: string;
     startYear: number;
     endYear: number;
+    /** Original birth date string for display */
+    birthDateDisplay?: string;
+    /** Original death date string for display */
+    deathDateDisplay?: string;
     isOngoing: boolean;
     hasBirthDate: boolean;
     row: number;
@@ -40,11 +44,21 @@ export interface TimelineEventBar {
     description?: string;
     startYear: number;
     endYear: number | null;
+    /** Original start date string for display (e.g., "2015-09-14" or "2015-09" or "2015") */
+    startDateDisplay?: string;
+    /** Original end date string for display */
+    endDateDisplay?: string;
     isOngoing: boolean;
     row: number;
     personId: Id<"people">;
     personName: string;
     claimType: ClaimType;
+    /** For merged events: all person IDs involved */
+    personIds: Id<"people">[];
+    /** For merged events: all person names involved */
+    personNames: string[];
+    /** Number of merged events (1 if not merged) */
+    mergedCount: number;
 }
 
 /** Complete timeline layout result */

@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { usePanZoom } from '../../hooks/usePanZoom';
@@ -28,7 +29,7 @@ import {
     SectionDivider,
     TimeGrid,
 } from './TimelineChartElements';
-import { TimelineEventBar } from './TimelineEventBar';
+import { TimelineEventBar, type PersonSelectionMenu } from './TimelineEventBar';
 import { TimelinePersonBar } from './TimelinePersonBar';
 import { TimelineFocusConnections } from './TimelineFocusConnections';
 
@@ -63,6 +64,69 @@ export function TimelineChart({
     
     // Tooltip state
     const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+    
+    // Person selection menu state (for merged events)
+    const [personMenu, setPersonMenu] = useState<PersonSelectionMenu | null>(null);
+    const [menuSelectedIndex, setMenuSelectedIndex] = useState(0);
+    
+    // Timeline scale state (stretches the timeline horizontally, 0.5x to 4x)
+    const [timeScale, setTimeScale] = useState(1);
+    
+    // Close person menu when clicking outside or pressing Escape
+    useEffect(() => {
+        if (!personMenu) return;
+        
+        // Use requestAnimationFrame to skip the current event loop
+        // This prevents the menu from closing immediately from the same click that opened it
+        let frameId = requestAnimationFrame(() => {
+            frameId = requestAnimationFrame(() => {
+                // Now we're safely past the original click event
+            });
+        });
+        
+        const handleClickOutside = (e: MouseEvent) => {
+            // Check if click is inside the menu
+            const target = e.target as HTMLElement;
+            if (target.closest('[data-person-menu]')) return;
+            setPersonMenu(null);
+        };
+        
+        const handleKeyDown = (e: KeyboardEvent) => {
+            switch (e.key) {
+                case 'Escape':
+                    setPersonMenu(null);
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    setMenuSelectedIndex(prev => 
+                        prev < personMenu.personIds.length - 1 ? prev + 1 : prev
+                    );
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    setMenuSelectedIndex(prev => prev > 0 ? prev - 1 : prev);
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    navigate(`/tree/${treeId}/person/${personMenu.personIds[menuSelectedIndex]}`);
+                    setPersonMenu(null);
+                    break;
+            }
+        };
+        
+        // Add listeners after a micro-delay to skip the opening click
+        const timeoutId = setTimeout(() => {
+            document.addEventListener('click', handleClickOutside);
+        }, 10);
+        
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            cancelAnimationFrame(frameId);
+            clearTimeout(timeoutId);
+            document.removeEventListener('click', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [personMenu, menuSelectedIndex, navigate, treeId]);
 
     // Build layout
     const layout = useMemo(() => buildTimelineLayout({
@@ -87,14 +151,14 @@ export function TimelineChart({
     const personSectionHeight = layout.personRowCount * PERSON_ROW_HEIGHT + 20;
     const totalContentHeight = eventSectionHeight + personSectionHeight + AXIS_HEIGHT + LEGEND_HEIGHT;
     
-    // Base chart width (before zoom)
-    const chartWidth = Math.max(800, (layout.maxYear - layout.minYear) * 8);
+    // Base chart width multiplied by timeScale for horizontal stretching
+    const baseChartWidth = Math.max(800, (layout.maxYear - layout.minYear) * 8);
+    const chartWidth = baseChartWidth * timeScale;
 
-    // Pan/zoom via shared hook
+    // Zoom controls (without drag-to-pan - scrollbars handle navigation)
     const {
         scale,
         containerRef,
-        containerProps,
         svgStyle,
         scaledWidth,
         scaledHeight,
@@ -102,7 +166,6 @@ export function TimelineChart({
         zoomOut: handleZoomOut,
         fit: handleFit,
         centerOn,
-        wasRecentlyPanning,
     } = usePanZoom({
         contentWidth: chartWidth,
         contentHeight: totalContentHeight,
@@ -111,10 +174,10 @@ export function TimelineChart({
         fitPadding: 40,
     });
 
-    // Time ticks
+    // Time ticks - adjust tick count based on timeScale for better density
     const timeTicks = useMemo(() => 
-        generateTimeTicks(layout.minYear, layout.maxYear, 15),
-        [layout.minYear, layout.maxYear]
+        generateTimeTicks(layout.minYear, layout.maxYear, Math.round(15 * timeScale)),
+        [layout.minYear, layout.maxYear, timeScale]
     );
 
     // Center on current year
@@ -124,9 +187,8 @@ export function TimelineChart({
         centerOn(targetX, totalContentHeight / 2);
     };
 
-    // Click handlers
+    // Click handlers - no need to check wasRecentlyPanning since we removed drag-to-pan
     const handlePersonClick = (personId: Id<"people">) => {
-        if (wasRecentlyPanning()) return;
         navigate(`/tree/${treeId}/person/${personId}`);
     };
 
@@ -146,6 +208,13 @@ export function TimelineChart({
     // Tooltip handlers
     const handleTooltipShow = (newTooltip: TooltipState) => setTooltip(newTooltip);
     const handleTooltipHide = () => setTooltip(null);
+    
+    // Person menu handler (for merged events)
+    const handleShowPersonMenu = (menu: PersonSelectionMenu) => {
+        setPersonMenu(menu);
+        setMenuSelectedIndex(0); // Reset selection when opening
+        setTooltip(null); // Hide tooltip when showing menu
+    };
 
     const chartHeight = typeof height === 'number' ? `${height}px` : height;
     // For percentage-based heights (like "100%"), we need flex to properly fill the space
@@ -176,12 +245,10 @@ export function TimelineChart({
         >
             {/* Control bar */}
             <div
-                className="flex items-center justify-between mb-3 text-xs text-muted"
-                onPointerDown={(e) => e.stopPropagation()}
-                onPointerMove={(e) => e.stopPropagation()}
+                className="flex items-center justify-between mb-3 text-xs text-muted flex-wrap gap-2"
             >
-                <span>Drag to pan · Scrollbars for precise moves</span>
-                <div className="flex items-center gap-2">
+                <span>Scroll to navigate · Hover for details</span>
+                <div className="flex items-center gap-2 flex-wrap">
                     <button className="btn btn-ghost btn-sm" onClick={() => handleExport('png')}>Export PNG</button>
                     <button className="btn btn-ghost btn-sm" onClick={() => handleExport('pdf')}>Export PDF</button>
                     {onToggleFullscreen && (
@@ -189,6 +256,22 @@ export function TimelineChart({
                             {isFullscreen ? 'Exit full screen' : 'Full screen'}
                         </button>
                     )}
+                    <span className="text-muted">|</span>
+                    {/* Timeline scale slider - stretches timeline horizontally */}
+                    <div className="flex items-center gap-1">
+                        <span className="text-xs whitespace-nowrap">Scale:</span>
+                        <input
+                            type="range"
+                            min="0.5"
+                            max="4"
+                            step="0.25"
+                            value={timeScale}
+                            onChange={(e) => setTimeScale(parseFloat(e.target.value))}
+                            className="w-20 h-1 accent-accent cursor-pointer"
+                            title={`Timeline scale: ${timeScale}x`}
+                        />
+                        <span className="text-xs w-8">{timeScale}x</span>
+                    </div>
                     <span className="text-muted">|</span>
                     <button className="btn btn-ghost btn-sm" onClick={handleZoomOut}>-</button>
                     <span style={{ minWidth: '3rem', textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
@@ -198,11 +281,10 @@ export function TimelineChart({
                 </div>
             </div>
 
-            {/* Chart container */}
+            {/* Chart container - uses native scrollbars for navigation */}
             <div
                 ref={containerRef}
                 className="flex-1 overflow-auto"
-                {...containerProps}
             >
                 <div style={{ 
                     width: scaledWidth, 
@@ -254,6 +336,7 @@ export function TimelineChart({
                                     chartWidth={chartWidth}
                                     paddingX={PADDING_X}
                                     onPersonClick={handlePersonClick}
+                                    onShowPersonMenu={handleShowPersonMenu}
                                     onTooltipShow={handleTooltipShow}
                                     onTooltipHide={handleTooltipHide}
                                 />
@@ -295,25 +378,94 @@ export function TimelineChart({
                 </div>
             </div>
 
-            {/* Tooltip */}
-            {tooltip && (
+            {/* Tooltip - rendered in portal to escape overflow constraints */}
+            {tooltip && createPortal(
                 <div
-                    className="fixed z-50 bg-surface border border-border rounded-lg shadow-lg p-3 max-w-xs"
                     style={{
+                        position: 'fixed',
                         left: tooltip.x,
-                        top: tooltip.y - 10,
+                        top: tooltip.y - 16,
                         transform: 'translate(-50%, -100%)',
+                        zIndex: 9999,
+                        backgroundColor: 'var(--color-surface)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                        padding: '12px',
+                        maxWidth: '280px',
+                        pointerEvents: 'none',
                     }}
                 >
                     {tooltip.lines.map((line, i) => (
                         <div 
                             key={i} 
-                            className={i === 0 ? 'font-semibold text-sm' : 'text-xs text-muted'}
+                            style={{
+                                fontWeight: i === 0 ? 600 : 400,
+                                fontSize: i === 0 ? '14px' : '12px',
+                                color: i === 0 ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                                marginTop: i > 0 ? '4px' : 0,
+                            }}
                         >
                             {line}
                         </div>
                     ))}
-                </div>
+                </div>,
+                document.body
+            )}
+            
+            {/* Person selection menu for merged events */}
+            {personMenu && createPortal(
+                <div
+                    data-person-menu
+                    style={{
+                        position: 'fixed',
+                        left: personMenu.x,
+                        top: personMenu.y + 8,
+                        transform: 'translateX(-50%)',
+                        zIndex: 9999,
+                        backgroundColor: 'var(--color-surface)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                        padding: '4px 0',
+                        minWidth: '150px',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div style={{
+                        padding: '8px 12px',
+                        fontSize: '12px',
+                        color: 'var(--color-text-muted)',
+                        borderBottom: '1px solid var(--color-border)',
+                    }}>
+                        Select person (↑↓ Enter)
+                    </div>
+                    {personMenu.personIds.map((personId, i) => (
+                        <button
+                            key={personId}
+                            style={{
+                                display: 'block',
+                                width: '100%',
+                                padding: '8px 12px',
+                                textAlign: 'left',
+                                fontSize: '14px',
+                                color: i === menuSelectedIndex ? 'var(--color-accent)' : 'var(--color-text-primary)',
+                                backgroundColor: i === menuSelectedIndex ? 'var(--color-accent-light, rgba(139, 92, 246, 0.1))' : 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.15s',
+                            }}
+                            onClick={() => {
+                                handlePersonClick(personId);
+                                setPersonMenu(null);
+                            }}
+                            onMouseEnter={() => setMenuSelectedIndex(i)}
+                        >
+                            {personMenu.personNames[i]}
+                        </button>
+                    ))}
+                </div>,
+                document.body
             )}
         </div>
     );

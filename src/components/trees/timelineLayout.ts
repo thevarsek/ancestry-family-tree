@@ -10,7 +10,7 @@ import type {
     TimelineLayoutInput,
     LifeEventClaim,
 } from './timelineTypes';
-import { formatClaimType, parseYear } from './timelineUtils';
+import { formatClaimType, parseFractionalYear } from './timelineUtils';
 
 // Re-export types for backward compatibility
 export type { ClaimType } from '../../types/claims';
@@ -31,6 +31,7 @@ export {
     xToYear,
     generateTimeTicks,
     parseYear,
+    parseFractionalYear,
 } from './timelineUtils';
 
 /**
@@ -76,6 +77,7 @@ function packIntoRows<T extends { startYear: number; endYear: number | null }>(
 
 /**
  * Pack event items with text labels into rows to avoid overlaps.
+ * Now only considers the event type label width (not person name or description).
  */
 function packEventsIntoRows(events: TimelineEventBar[]): Map<number, number> {
     const rowAssignments = new Map<number, number>();
@@ -85,21 +87,18 @@ function packEventsIntoRows(events: TimelineEventBar[]): Map<number, number> {
         .map((_, i) => i)
         .sort((a, b) => events[a].startYear - events[b].startYear);
     
-    const DESCRIPTION_MAX_CHARS = 50;
-    const estimateLabelWidth = (title: string, description?: string): number => {
-        let totalChars = title.length;
-        if (description) {
-            const descLength = Math.min(description.length, DESCRIPTION_MAX_CHARS);
-            totalChars += 3 + descLength;
-        }
-        return Math.ceil(totalChars / 3);
+    // Only estimate width for the event type label (e.g., "Marriage", "Residence")
+    const estimateLabelWidth = (claimType: string): number => {
+        const formattedType = formatClaimType(claimType);
+        // Approximate character width in years (smaller since labels are shorter now)
+        return Math.ceil(formattedType.length / 2.5);
     };
     
     for (const idx of sortedIndices) {
         const event = events[idx];
         const isPointEvent = event.endYear === null || event.endYear === event.startYear;
         
-        const labelWidth = estimateLabelWidth(event.title, event.description);
+        const labelWidth = estimateLabelWidth(event.claimType);
         let itemEnd: number;
         
         if (isPointEvent) {
@@ -110,7 +109,7 @@ function packEventsIntoRows(events: TimelineEventBar[]): Map<number, number> {
         }
         
         let assignedRow = -1;
-        const gap = 3;
+        const gap = 2; // Reduced gap since labels are shorter
         
         for (let r = 0; r < rows.length; r++) {
             const rowItems = rows[r];
@@ -140,32 +139,39 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
     const { lifeEvents, people, relationships, visibleEventTypes, visiblePersonIds } = input;
     const currentYear = new Date().getFullYear();
     
-    const processedEvents: TimelineEventBar[] = [];
+    const rawEvents: TimelineEventBar[] = [];
     
     // Process life events (claims)
     for (const claim of lifeEvents) {
         if (!visibleEventTypes.has(claim.claimType)) continue;
         if (!visiblePersonIds.has(claim.personId)) continue;
         
-        const startYear = parseYear(claim.value.date);
+        // Use fractional year for precise positioning
+        // yyyy → Jan 1, yyyy-mm → middle of month, yyyy-mm-dd → exact day
+        const startYear = parseFractionalYear(claim.value.date);
         if (startYear === null) continue;
         
-        const endYear = parseYear(claim.value.dateEnd);
+        const endYear = parseFractionalYear(claim.value.dateEnd);
         const isOngoing = claim.value.isCurrent ?? false;
         const title = `${formatClaimType(claim.claimType)} - ${claim.personName}`;
         
-        processedEvents.push({
+        rawEvents.push({
             id: claim._id,
             claim,
             title,
             description: claim.value.description,
             startYear,
             endYear: endYear ?? (isOngoing ? currentYear : null),
+            startDateDisplay: claim.value.date,
+            endDateDisplay: claim.value.dateEnd,
             isOngoing,
             row: 0,
             personId: claim.personId,
             personName: claim.personName,
             claimType: claim.claimType as ClaimType,
+            personIds: [claim.personId],
+            personNames: [claim.personName],
+            mergedCount: 1,
         });
     }
     
@@ -175,40 +181,54 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
         
         const fullName = [person.givenNames, person.surnames].filter(Boolean).join(' ') || 'Unknown';
         
-        const birthYear = parseYear(person.birthDate);
+        // Use fractional year for precise positioning of birth/death
+        const birthYear = parseFractionalYear(person.birthDate);
         if (birthYear !== null && visibleEventTypes.has('birth')) {
-            processedEvents.push({
+            rawEvents.push({
                 id: `${person._id}-birth` as Id<"claims">,
                 claim: null as unknown as LifeEventClaim,
                 title: `Birth - ${fullName}`,
                 description: undefined,
                 startYear: birthYear,
                 endYear: null,
+                startDateDisplay: person.birthDate,
+                endDateDisplay: undefined,
                 isOngoing: false,
                 row: 0,
                 personId: person._id,
                 personName: fullName,
                 claimType: 'birth',
+                personIds: [person._id],
+                personNames: [fullName],
+                mergedCount: 1,
             });
         }
         
-        const deathYear = parseYear(person.deathDate);
+        const deathYear = parseFractionalYear(person.deathDate);
         if (deathYear !== null && visibleEventTypes.has('death')) {
-            processedEvents.push({
+            rawEvents.push({
                 id: `${person._id}-death` as Id<"claims">,
                 claim: null as unknown as LifeEventClaim,
                 title: `Death - ${fullName}`,
                 description: undefined,
                 startYear: deathYear,
                 endYear: null,
+                startDateDisplay: person.deathDate,
+                endDateDisplay: undefined,
                 isOngoing: false,
                 row: 0,
                 personId: person._id,
                 personName: fullName,
                 claimType: 'death',
+                personIds: [person._id],
+                personNames: [fullName],
+                mergedCount: 1,
             });
         }
     }
+    
+    // Merge events with same type and date range
+    const processedEvents = mergeEvents(rawEvents);
     
     // Process people
     const processedPeople: TimelinePersonBar[] = [];
@@ -216,10 +236,11 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
     for (const person of people) {
         if (!visiblePersonIds.has(person._id)) continue;
         
-        const birthYear = parseYear(person.birthDate);
+        // Use fractional year for precise positioning of person lifespans
+        const birthYear = parseFractionalYear(person.birthDate);
         if (birthYear === null) continue;
         
-        const deathYear = parseYear(person.deathDate);
+        const deathYear = parseFractionalYear(person.deathDate);
         const isOngoing = person.isLiving || person.isOngoing || (!deathYear && !person.deathDate);
         const fullName = [person.givenNames, person.surnames].filter(Boolean).join(' ') || 'Unknown';
         
@@ -229,6 +250,8 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
             fullName,
             startYear: birthYear,
             endYear: deathYear ?? (isOngoing ? currentYear : birthYear),
+            birthDateDisplay: person.birthDate,
+            deathDateDisplay: person.deathDate,
             isOngoing,
             hasBirthDate: true,
             row: 0,
@@ -281,4 +304,62 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
         personRowCount,
         relationships,
     };
+}
+
+/**
+ * Merge events with the same type and date range into single entries.
+ * For example, a Marriage event for two people on the same date becomes one entry.
+ */
+function mergeEvents(events: TimelineEventBar[]): TimelineEventBar[] {
+    // Group events by claimType + startYear + endYear
+    // Round years to 3 decimal places to handle floating-point precision issues
+    const groups = new Map<string, TimelineEventBar[]>();
+    
+    for (const event of events) {
+        const startRounded = Math.round(event.startYear * 1000) / 1000;
+        const endRounded = event.endYear !== null 
+            ? Math.round(event.endYear * 1000) / 1000 
+            : 'null';
+        const key = `${event.claimType}-${startRounded}-${endRounded}`;
+        const existing = groups.get(key) ?? [];
+        existing.push(event);
+        groups.set(key, existing);
+    }
+    
+    const merged: TimelineEventBar[] = [];
+    
+    for (const groupEvents of groups.values()) {
+        if (groupEvents.length === 1) {
+            // No merge needed, just use the event as-is
+            merged.push(groupEvents[0]);
+        } else {
+            // Merge multiple events into one
+            const first = groupEvents[0];
+            const allPersonIds = groupEvents.map(e => e.personId);
+            const allPersonNames = groupEvents.map(e => e.personName);
+            
+            // Create a combined title (e.g., "Marriage - Ferdinando & Valeria")
+            const combinedNames = allPersonNames.join(' & ');
+            const combinedTitle = `${formatClaimType(first.claimType)} - ${combinedNames}`;
+            
+            // Combine descriptions if any exist
+            const descriptions = groupEvents
+                .map(e => e.description)
+                .filter((d): d is string => Boolean(d));
+            const combinedDescription = descriptions.length > 0 
+                ? descriptions.join('; ') 
+                : undefined;
+            
+            merged.push({
+                ...first,
+                title: combinedTitle,
+                description: combinedDescription,
+                personIds: allPersonIds,
+                personNames: allPersonNames,
+                mergedCount: groupEvents.length,
+            });
+        }
+    }
+    
+    return merged;
 }

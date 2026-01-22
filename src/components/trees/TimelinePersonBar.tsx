@@ -75,14 +75,25 @@ export function TimelinePersonBar({
         barColor = CHILD_COLOR;
     }
 
-    // Build tooltip content with dates
+    // Build tooltip content with dates - use original date strings
     const tooltipLines = [personBar.fullName];
-    const dateStr = personBar.isOngoing 
-        ? `${personBar.startYear} - present`
-        : personBar.endYear !== personBar.startYear
-            ? `${personBar.startYear} - ${personBar.endYear}`
-            : `Born ${personBar.startYear}`;
-    tooltipLines.push(dateStr);
+    let dateStr: string;
+    if (personBar.isOngoing) {
+        dateStr = personBar.birthDateDisplay 
+            ? `${personBar.birthDateDisplay} - present`
+            : 'present';
+    } else if (personBar.deathDateDisplay) {
+        dateStr = personBar.birthDateDisplay
+            ? `${personBar.birthDateDisplay} - ${personBar.deathDateDisplay}`
+            : personBar.deathDateDisplay;
+    } else if (personBar.birthDateDisplay) {
+        dateStr = `Born ${personBar.birthDateDisplay}`;
+    } else {
+        dateStr = '';
+    }
+    if (dateStr) {
+        tooltipLines.push(dateStr);
+    }
     if (isFocused) {
         tooltipLines.push('(Focused)');
     } else if (isParentOfFocused) {
@@ -98,10 +109,9 @@ export function TimelinePersonBar({
     const textFitsInside = nameWidth + 12 < width;
 
     const handleMouseEnter = (e: React.MouseEvent) => {
-        const rect = e.currentTarget.getBoundingClientRect();
         onTooltipShow({
-            x: rect.left + rect.width / 2,
-            y: rect.top,
+            x: e.clientX,
+            y: e.clientY,
             lines: tooltipLines,
         });
     };
@@ -111,8 +121,17 @@ export function TimelinePersonBar({
             className="person-bar cursor-pointer"
             onClick={() => onPersonClick(personBar.id)}
             onMouseEnter={handleMouseEnter}
+            onMouseMove={handleMouseEnter}
             onMouseLeave={onTooltipHide}
         >
+            {/* Invisible hit area for easier interaction */}
+            <rect
+                x={x1 - 4}
+                y={y - 4}
+                width={Math.max(width + 8, personBar.fullName.length * 7 + 20)}
+                height={PERSON_BAR_HEIGHT + 8}
+                fill="transparent"
+            />
             <rect
                 x={x1}
                 y={y}

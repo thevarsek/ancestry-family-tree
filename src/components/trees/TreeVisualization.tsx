@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useQuery } from 'convex/react';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { api } from '../../../convex/_generated/api';
@@ -62,6 +62,9 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
     const [timelineVisibleEventTypes, setTimelineVisibleEventTypes] = useState<string[]>([]);
     const [timelineVisiblePersonIds, setTimelineVisiblePersonIds] = useState<string[]>([]);
     const [timelineFocusedPersonId, setTimelineFocusedPersonId] = useState<Id<"people"> | null>(null);
+    
+    // Track if filters have been initialized (to allow user to deselect all)
+    const filtersInitializedRef = useRef(false);
 
     // Get profile photos for all people in the tree
     const profilePhotoIds = treeData?.people
@@ -83,24 +86,26 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
         }
     }, [treeData, rootPersonId]);
 
-    // Initialize timeline filters when data loads
+    // Initialize timeline filters when data loads (only once)
     useEffect(() => {
-        if (timelineData) {
+        if (timelineData && !filtersInitializedRef.current) {
             // Initialize with all event types visible
             const eventTypes = timelineData.eventTypes ?? [];
-            if (timelineVisibleEventTypes.length === 0 && eventTypes.length > 0) {
+            if (eventTypes.length > 0) {
                 setTimelineVisibleEventTypes(eventTypes);
             }
             // Initialize with all people with birth dates visible
             const people = timelineData.people ?? [];
-            if (timelineVisiblePersonIds.length === 0 && people.length > 0) {
+            if (people.length > 0) {
                 const peopleWithBirthDates = people
                     .filter((p) => p.birthDate)
                     .map((p) => p._id);
                 setTimelineVisiblePersonIds(peopleWithBirthDates);
             }
+            // Mark as initialized so user can deselect all without auto-reset
+            filtersInitializedRef.current = true;
         }
-    }, [timelineData, timelineVisibleEventTypes.length, timelineVisiblePersonIds.length]);
+    }, [timelineData]);
 
     // Convert filter arrays to Sets for TimelineChart
     const visibleEventTypesSet = useMemo(

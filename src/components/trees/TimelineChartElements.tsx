@@ -194,7 +194,7 @@ export function TimeGrid({
     height,
 }: TimeGridProps) {
     return (
-        <g className="grid-lines">
+        <g className="grid-lines" style={{ pointerEvents: 'none' }}>
             {timeTicks.map(year => {
                 const x = yearToX(year, minYear, maxYear, chartWidth, PADDING_X);
                 return (
