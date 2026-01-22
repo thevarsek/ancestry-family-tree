@@ -5,4 +5,6 @@ export interface PersonWithPhoto extends Doc<"people"> {
     profilePhotoZoom?: number;
     profilePhotoFocusX?: number;
     profilePhotoFocusY?: number;
+    profilePhotoWidth?: number;
+    profilePhotoHeight?: number;
 }

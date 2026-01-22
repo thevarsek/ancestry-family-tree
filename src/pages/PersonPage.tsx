@@ -6,6 +6,7 @@ import type { Doc, Id } from '../../convex/_generated/dataModel';
 import { AddRelationshipModal } from '../components/people/AddRelationshipModal';
 import { PersonModal } from '../components/people/PersonList';
 import { RelationshipCard } from '../components/people/RelationshipCard';
+import { RelationshipChart } from '../components/people/RelationshipChart';
 import { ProfilePhoto } from '../components/people/ProfilePhoto';
 import { AddClaimModal } from '../components/claims/AddClaimModal';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
@@ -309,9 +310,12 @@ export function PersonPage() {
                                                     <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-border" />
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div>
-                                                            <h4 className="font-medium capitalize">
+                                                            <Link
+                                                                to={`/tree/${treeId}/person/${personId}/event/${claim._id}`}
+                                                                className="font-medium capitalize hover:text-accent"
+                                                            >
                                                                 {getClaimTitle(claim)}
-                                                            </h4>
+                                                            </Link>
                                                             <p className="text-sm text-muted">
                                                                 {claim.place?.displayName || claim.value.description || 'No details yet'}
                                                             </p>
@@ -410,9 +414,12 @@ export function PersonPage() {
                                         {residenceClaims.map((claim) => (
                                             <div key={claim._id} className="flex items-start justify-between gap-4">
                                                 <div>
-                                                    <div className="font-medium">
+                                                    <Link
+                                                        to={`/tree/${treeId}/person/${personId}/event/${claim._id}`}
+                                                        className="font-medium hover:text-accent"
+                                                    >
                                                         {claim.place?.displayName}
-                                                    </div>
+                                                    </Link>
                                                     <div className="text-xs text-muted">
                                                         {formatClaimDate(claim.value) || 'Unknown date'}
                                                     </div>
@@ -498,6 +505,22 @@ export function PersonPage() {
                                 );
                             })}
                         </div>
+
+                        <RelationshipChart
+                            person={person}
+                            profilePhoto={
+                                profilePhoto
+                                    ? {
+                                        storageUrl: profilePhoto.storageUrl,
+                                        zoomLevel: profilePhoto.zoomLevel,
+                                        focusX: profilePhoto.focusX,
+                                        focusY: profilePhoto.focusY,
+                                    }
+                                    : undefined
+                            }
+                            relationships={relationships}
+                            getRelationshipPhoto={getRelationshipPhoto}
+                        />
                     </div>
                 )}
 
@@ -568,11 +591,14 @@ export function PersonPage() {
                                                 {group.claims.map((claim) => (
                                                     <div key={claim._id} className="flex items-start justify-between gap-3">
                                                         <div>
-                                                            <div className="text-sm font-medium capitalize">
+                                                            <Link
+                                                                to={`/tree/${treeId}/person/${personId}/event/${claim._id}`}
+                                                                className="text-sm font-medium capitalize hover:text-accent"
+                                                            >
                                                                 {claim.claimType === 'custom'
                                                                     ? (claim.value.customFields as { title?: string } | undefined)?.title || 'Custom event'
                                                                     : claim.claimType.replace('_', ' ')}
-                                                            </div>
+                                                            </Link>
                                                             <div className="text-xs text-muted">
                                                                 {formatClaimDate(claim.value) || 'Unknown date'}
                                                             </div>

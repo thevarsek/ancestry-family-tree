@@ -49,6 +49,8 @@ export function PedigreeChart({
     const NODE_WIDTH = 180;
     const NODE_HEIGHT = 100;
     const HORIZONTAL_GAP = 80;
+    const PHOTO_SIZE = 32;
+    const PHOTO_RADIUS = PHOTO_SIZE / 2;
 
     const chartData = useMemo(() => buildPedigreeLayout({
         people,
@@ -150,6 +152,53 @@ export function PedigreeChart({
             container.scrollLeft = (chartData.width * nextScale - container.clientWidth) / 2;
             container.scrollTop = (chartData.height * nextScale - container.clientHeight) / 2;
         });
+    };
+
+    const getPhotoSizing = (person: PersonWithPhoto) => {
+        const hasFocus =
+            person.profilePhotoZoom !== undefined &&
+            person.profilePhotoFocusX !== undefined &&
+            person.profilePhotoFocusY !== undefined;
+
+        if (!hasFocus) {
+            return {
+                coverWidth: PHOTO_SIZE,
+                coverHeight: PHOTO_SIZE,
+                translateX: 0,
+                translateY: 0,
+                zoom: 1
+            };
+        }
+
+        const imageWidth = person.profilePhotoWidth && person.profilePhotoWidth > 0
+            ? person.profilePhotoWidth
+            : PHOTO_SIZE;
+        const imageHeight = person.profilePhotoHeight && person.profilePhotoHeight > 0
+            ? person.profilePhotoHeight
+            : PHOTO_SIZE;
+        const zoom = person.profilePhotoZoom ?? 1;
+        const focusX = person.profilePhotoFocusX ?? 0.5;
+        const focusY = person.profilePhotoFocusY ?? 0.5;
+
+        const coverScale = Math.max(PHOTO_SIZE / imageWidth, PHOTO_SIZE / imageHeight);
+        const coverWidth = imageWidth * coverScale;
+        const coverHeight = imageHeight * coverScale;
+        const scaledWidth = coverWidth * zoom;
+        const scaledHeight = coverHeight * zoom;
+        const maxTranslateX = PHOTO_SIZE - scaledWidth;
+        const maxTranslateY = PHOTO_SIZE - scaledHeight;
+        const canPanX = maxTranslateX < 0;
+        const canPanY = maxTranslateY < 0;
+        const translateX = canPanX ? maxTranslateX * focusX : (PHOTO_SIZE - scaledWidth) / 2;
+        const translateY = canPanY ? maxTranslateY * focusY : (PHOTO_SIZE - scaledHeight) / 2;
+
+        return {
+            coverWidth,
+            coverHeight,
+            translateX,
+            translateY,
+            zoom
+        };
     };
 
     const handleCenter = () => {
@@ -311,22 +360,41 @@ export function PedigreeChart({
                                     filter="drop-shadow(0 2px 4px rgba(0,0,0,0.1))"
                                 />
                                 {node.person.profilePhotoUrl ? (
-                                    <image
-                                        href={node.person.profilePhotoUrl}
-                                        x={NODE_WIDTH / 2 - 16}
-                                        y={8}
-                                        width={32}
-                                        height={32}
-                                        style={{
-                                            clipPath: 'circle(16px at center)',
-                                            transformBox: 'fill-box',
-                                            transformOrigin: '0 0',
-                                            transform: node.person.profilePhotoZoom && node.person.profilePhotoFocusX !== undefined && node.person.profilePhotoFocusY !== undefined
-                                                ? `translate(${(32 - 32 * node.person.profilePhotoZoom) * node.person.profilePhotoFocusX}px, ${(32 - 32 * node.person.profilePhotoZoom) * node.person.profilePhotoFocusY}px) scale(${node.person.profilePhotoZoom})`
-                                                : undefined
-                                        }}
-                                        preserveAspectRatio="xMidYMid slice"
-                                    />
+                                    (() => {
+                                        const photoSizing = getPhotoSizing(node.person);
+                                        const photoX = NODE_WIDTH / 2 - PHOTO_RADIUS;
+                                        const photoY = 8;
+                                        const clipId = `photo-clip-${node.id}`;
+                                        return (
+                                            <>
+                                                <defs>
+                                                    <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
+                                                        <circle
+                                                            cx={photoX + PHOTO_RADIUS}
+                                                            cy={photoY + PHOTO_RADIUS}
+                                                            r={PHOTO_RADIUS}
+                                                        />
+                                                    </clipPath>
+                                                </defs>
+                                                <image
+                                                    href={node.person.profilePhotoUrl}
+                                                    x={photoX}
+                                                    y={photoY}
+                                                    width={photoSizing.coverWidth}
+                                                    height={photoSizing.coverHeight}
+                                                    clipPath={`url(#${clipId})`}
+                                                    preserveAspectRatio="xMidYMid slice"
+                                                    style={photoSizing.zoom !== 1 || photoSizing.translateX !== 0 || photoSizing.translateY !== 0
+                                                        ? {
+                                                            transformBox: 'fill-box',
+                                                            transformOrigin: '0 0',
+                                                            transform: `translate(${photoSizing.translateX}px, ${photoSizing.translateY}px) scale(${photoSizing.zoom})`
+                                                        }
+                                                        : undefined}
+                                                />
+                                            </>
+                                        );
+                                    })()
                                 ) : (
                                     <g>
                                         <circle

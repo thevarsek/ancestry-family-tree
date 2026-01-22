@@ -508,7 +508,9 @@ export const getUrls = query({
                 storageUrl: item.storageId ? await ctx.storage.getUrl(item.storageId) : undefined,
                 zoomLevel: item.zoomLevel,
                 focusX: item.focusX,
-                focusY: item.focusY
+                focusY: item.focusY,
+                width: item.width,
+                height: item.height
             }))
         );
     }

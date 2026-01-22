@@ -272,6 +272,8 @@ export function MediaUploadModal({
             const { storageId } = await uploadResponse.json() as { storageId: Id<'_storage'> };
             const mimeType = file.type;
             const mediaType = inferMediaType(mimeType);
+            const width = imageSize.width || undefined;
+            const height = imageSize.height || undefined;
 
             const mediaId = await createMedia({
                 treeId,
@@ -284,6 +286,8 @@ export function MediaUploadModal({
                 role: setAsProfilePhoto ? 'profile_photo' : 'attachment',
                 mimeType,
                 fileSizeBytes: file.size,
+                width: mediaType === 'photo' ? width : undefined,
+                height: mediaType === 'photo' ? height : undefined,
                 zoomLevel: setAsProfilePhoto ? zoomLevel : undefined,
                 focusX: setAsProfilePhoto ? focusX : undefined,
                 focusY: setAsProfilePhoto ? focusY : undefined,

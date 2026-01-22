@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { FanChart } from './FanChart';
 import { PedigreeChart } from './PedigreeChart';
 import { FilterableSelect, type FilterableOption } from '../ui/FilterableSelect';
 
@@ -10,6 +11,11 @@ const chartOptions = [
         id: 'family-tree',
         label: 'Family Tree',
         description: 'Explore ancestry and descendants for a single person.'
+    },
+    {
+        id: 'fan-chart',
+        label: 'Radial Fan',
+        description: 'Fan layout to reveal lineage patterns without overlap.'
     }
 ] as const;
 
@@ -65,7 +71,9 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
     const chartConfig = chartOptions.find((option) => option.id === activeChart) ?? chartOptions[0];
     const chartDescription = activeChart === 'family-tree'
         ? `Viewing ancestry and descendants for ${currentPerson ? `${currentPerson.givenNames} ${currentPerson.surnames}` : 'selected person'}.`
-        : chartConfig.description;
+        : activeChart === 'fan-chart'
+            ? `Radial view focused on ${currentPerson ? `${currentPerson.givenNames} ${currentPerson.surnames}` : 'selected person'}.`
+            : chartConfig.description;
 
     // Create profile photo map
     const profilePhotoMap = new Map(
@@ -81,6 +89,8 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
             profilePhotoZoom: photo?.zoomLevel,
             profilePhotoFocusX: photo?.focusX,
             profilePhotoFocusY: photo?.focusY,
+            profilePhotoWidth: photo?.width,
+            profilePhotoHeight: photo?.height,
         };
     });
 
@@ -113,7 +123,7 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
                             className="filterable-select-wide filterable-select-multiline"
                         />
                     </div>
-                    {activeChart === 'family-tree' && (
+                    {(activeChart === 'family-tree' || activeChart === 'fan-chart') && (
                         <div className="chart-controls-right">
                             <span className="text-sm font-medium whitespace-nowrap">Focus on:</span>
                             <FilterableSelect
@@ -143,12 +153,32 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
             </div>
             <p className="md:text-right">Drag to pan, click a card to open profile</p>
         </div>
+    ) : activeChart === 'fan-chart' ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-muted px-2">
+            <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full" style={{ background: 'linear-gradient(135deg, #ad8aff, #ff7c1e)' }}></span>
+                <span>Lineage palette by branch</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <span className="w-8 h-0.5 bg-border"></span>
+                <span>Ancestor and descendant rings</span>
+            </div>
+            <p className="md:text-right">Zoom in for dense rings, click a name to open profile</p>
+        </div>
     ) : null;
 
     const chartBody = rootPersonId && activeChart === 'family-tree' ? (
         <PedigreeChart
             treeId={treeId}
             people={peopleWithPhotos}
+            relationships={treeData.relationships}
+            rootPersonId={rootPersonId}
+            onToggleFullscreen={() => setIsFullscreen(true)}
+        />
+    ) : rootPersonId && activeChart === 'fan-chart' ? (
+        <FanChart
+            treeId={treeId}
+            people={treeData.people}
             relationships={treeData.relationships}
             rootPersonId={rootPersonId}
             onToggleFullscreen={() => setIsFullscreen(true)}
@@ -187,6 +217,17 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
                                         <PedigreeChart
                                             treeId={treeId}
                                             people={peopleWithPhotos}
+                                            relationships={treeData.relationships}
+                                            rootPersonId={rootPersonId}
+                                            height="100%"
+                                            isFullscreen
+                                            onToggleFullscreen={() => setIsFullscreen(false)}
+                                        />
+                                    )}
+                                    {rootPersonId && activeChart === 'fan-chart' && (
+                                        <FanChart
+                                            treeId={treeId}
+                                            people={treeData.people}
                                             relationships={treeData.relationships}
                                             rootPersonId={rootPersonId}
                                             height="100%"

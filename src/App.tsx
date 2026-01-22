@@ -5,6 +5,8 @@ import { TreeList } from './components/trees/TreeList';
 import { TreePage } from './pages/TreePage';
 import { TreeSettings } from './pages/TreeSettings';
 import { PersonPage } from './pages/PersonPage';
+import { LifeEventPage } from './pages/LifeEventPage';
+import { SourcePage } from './pages/SourcePage';
 import { UserButton } from "@clerk/clerk-react";
 import './App.css';
 
@@ -37,6 +39,9 @@ function AppLayout() {
                     <Route path="/tree/:treeId" element={<TreePage />} />
                     <Route path="/tree/:treeId/settings" element={<TreeSettings />} />
                     <Route path="/tree/:treeId/person/:personId" element={<PersonPage />} />
+                    <Route path="/tree/:treeId/person/:personId/event/:claimId" element={<LifeEventPage />} />
+                    <Route path="/tree/:treeId/person/:personId/source/:sourceId" element={<SourcePage />} />
+                    <Route path="/tree/:treeId/source/:sourceId" element={<SourcePage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </main>

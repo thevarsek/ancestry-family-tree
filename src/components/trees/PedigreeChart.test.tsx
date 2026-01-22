@@ -112,6 +112,8 @@ describe('PedigreeChart', () => {
             profilePhotoZoom: 2,
             profilePhotoFocusX: 1,
             profilePhotoFocusY: 1,
+            profilePhotoWidth: 400,
+            profilePhotoHeight: 200,
         };
 
         const { container } = render(
@@ -127,7 +129,9 @@ describe('PedigreeChart', () => {
 
         const image = container.querySelector('image');
         expect(image).not.toBeNull();
-        expect((image as SVGImageElement).style.transform).toBe('translate(-32px, -32px) scale(2)');
+        expect((image as SVGImageElement).getAttribute('width')).toBe('64');
+        expect((image as SVGImageElement).getAttribute('height')).toBe('32');
+        expect((image as SVGImageElement).style.transform).toBe('translate(-96px, -32px) scale(2)');
     });
 
     it('navigates to the person detail route on node click', async () => {

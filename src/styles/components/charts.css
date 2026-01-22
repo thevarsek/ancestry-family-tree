@@ -1,0 +1,339 @@
+.fan-chart-scroll {
+    padding: var(--space-4);
+    background: radial-gradient(circle at center, rgba(250, 250, 249, 0.95) 0%, rgba(245, 245, 244, 0.6) 100%);
+}
+
+.fan-chart-canvas {
+    min-height: 100%;
+    min-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+[data-theme="dark"] .fan-chart-scroll {
+    background: radial-gradient(circle at center, rgba(41, 37, 36, 0.95) 0%, rgba(28, 25, 23, 0.7) 100%);
+}
+
+.fan-chart-svg {
+    font-family: var(--font-serif);
+}
+
+.fan-chart-node {
+    cursor: pointer;
+}
+
+.fan-chart-segment {
+    fill: var(--color-surface);
+    stroke: var(--color-border);
+    stroke-width: 1.2;
+    transition: fill var(--transition-normal), stroke var(--transition-normal), opacity var(--transition-normal);
+}
+
+.fan-chart-segment.is-highlighted {
+    opacity: 1;
+}
+
+.fan-chart-segment.is-dimmed {
+    opacity: 0.4;
+}
+
+.fan-chart-label {
+    font-size: 0.78rem;
+    fill: var(--color-text-primary);
+    pointer-events: none;
+}
+
+.fan-chart-label.is-dimmed {
+    opacity: 0.5;
+}
+
+.fan-chart-status {
+    font-size: 0.62rem;
+    fill: var(--color-text-muted);
+    font-family: var(--font-sans);
+}
+
+.fan-chart-root {
+    stroke: rgba(255, 255, 255, 0.9);
+    stroke-width: 2;
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.12));
+}
+
+.fan-chart-root-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    fill: var(--color-text-inverse);
+    pointer-events: none;
+}
+
+.fan-chart-root-label .fan-chart-status {
+    fill: rgba(255, 255, 255, 0.78);
+}
+
+.relationship-chart {
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.relationship-chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.relationship-chart-title {
+    font-size: var(--text-base);
+    margin-bottom: var(--space-1);
+}
+
+.relationship-chart-subtitle {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+}
+
+.relationship-chart-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.relationship-chart-scroll {
+    overflow-x: auto;
+    padding-bottom: var(--space-2);
+}
+
+.relationship-chart-canvas {
+    min-width: 100%;
+    width: max-content;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-5);
+}
+
+.relationship-chart-tree {
+    --relationship-chart-gap: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+}
+
+.relationship-chart-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.relationship-chart-label {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    font-weight: var(--font-medium);
+}
+
+.relationship-chart-line-row {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: var(--space-4);
+    padding: var(--relationship-chart-gap) var(--space-5);
+    width: max-content;
+    max-width: 100%;
+}
+
+.relationship-chart-line-row::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--color-border-emphasis);
+    z-index: 0;
+}
+
+.relationship-chart-line-row-top {
+    align-items: flex-start;
+}
+
+.relationship-chart-line-row-top::before {
+    top: 0;
+}
+
+.relationship-chart-line-row-bottom {
+    align-items: flex-end;
+}
+
+.relationship-chart-line-row-bottom::before {
+    bottom: 0;
+}
+
+.relationship-chart-siblings-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
+    align-items: center;
+    gap: var(--space-5);
+    width: max-content;
+    z-index: 1;
+}
+
+.relationship-chart-siblings-group {
+    display: flex;
+    justify-content: center;
+}
+
+.relationship-chart-siblings-group-center {
+    min-width: 180px;
+    display: flex;
+    justify-content: center;
+}
+
+.relationship-chart-node-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-4);
+    padding: 0;
+    width: max-content;
+    position: relative;
+    z-index: 1;
+}
+
+.relationship-chart-line-node {
+    position: relative;
+    z-index: 1;
+}
+
+.relationship-chart-line-node-up::before,
+.relationship-chart-line-node-down::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    width: 2px;
+    background: var(--color-border-emphasis);
+    transform: translateX(-50%);
+}
+
+.relationship-chart-line-node-up::before {
+    top: calc(var(--relationship-chart-gap) * -1);
+    height: var(--relationship-chart-gap);
+}
+
+.relationship-chart-line-node-down::after {
+    top: 100%;
+    height: var(--relationship-chart-gap);
+}
+
+.relationship-chart-connector {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    height: var(--relationship-chart-gap);
+}
+
+.relationship-chart-connector::before {
+    content: '';
+    width: 2px;
+    background: var(--color-border-emphasis);
+}
+
+
+.relationship-chart-node {
+    position: relative;
+    z-index: 1;
+    min-width: 140px;
+}
+
+.relationship-chart-node-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    text-decoration: none;
+    color: inherit;
+}
+
+.relationship-chart-node-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    text-decoration: none;
+}
+
+.relationship-chart-node.is-center .relationship-chart-node-card {
+    border-color: var(--color-accent);
+    background: var(--color-accent-subtle);
+}
+
+.relationship-chart-node-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.relationship-chart-node-name {
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    color: var(--color-text-primary);
+}
+
+.relationship-chart-node-role {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    text-transform: capitalize;
+}
+
+.relationship-chart-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+    text-align: center;
+}
+
+.relationship-chart-empty p {
+    margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+    .relationship-chart-siblings-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-4);
+        width: 100%;
+    }
+
+    .relationship-chart-siblings-group-center {
+        min-width: 0;
+    }
+
+    .relationship-chart-line-row {
+        width: 100%;
+        padding: var(--space-2);
+    }
+
+    .relationship-chart-node-row {
+        width: 100%;
+    }
+
+    .relationship-chart-line-row::before,
+    .relationship-chart-line-node-up::before,
+    .relationship-chart-line-node-down::after,
+    .relationship-chart-connector::before {
+        display: none;
+    }
+
+    .relationship-chart-connector {
+        height: 0;
+    }
+}

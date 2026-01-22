@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from 'convex/react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { CreateSourceModal } from './CreateSourceModal';
@@ -8,6 +9,7 @@ export function SourceList({ treeId }: { treeId: Id<"trees"> }) {
     const sources = useQuery(api.sources.list, { treeId, limit: 100 });
     const [showCreate, setShowCreate] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const navigate = useNavigate();
 
     if (sources === undefined) {
         return <div className="spinner spinner-lg mx-auto mt-8" />;
@@ -44,7 +46,11 @@ export function SourceList({ treeId }: { treeId: Id<"trees"> }) {
 
             <div className="grid grid-cols-1 gap-3">
                 {filteredSources.map((source: Doc<"sources">) => (
-                    <div key={source._id} className="card p-4 hover:shadow-md transition-shadow cursor-pointer">
+                    <div
+                        key={source._id}
+                        className="card p-4 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => navigate(`/tree/${treeId}/source/${source._id}`)}
+                    >
                         <div className="flex justify-between items-start">
                             <div>
                                 <h4 className="font-semibold text-lg">{source.title}</h4>
