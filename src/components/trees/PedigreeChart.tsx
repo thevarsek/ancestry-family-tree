@@ -287,35 +287,35 @@ export function PedigreeChart({
                                 {node.person.profilePhotoUrl ? (
                                     (() => {
                                         const photoSizing = getPhotoSizing(node.person);
-                                        const photoX = NODE_WIDTH / 2 - PHOTO_RADIUS;
-                                        const photoY = 8;
+                                        // Center the photo circle at x=NODE_WIDTH/2, y=24 (same as initials circle)
+                                        const circleCenterX = NODE_WIDTH / 2;
+                                        const circleCenterY = 24;
                                         const clipId = `photo-clip-${node.id}`;
+                                        
+                                        // Calculate image position: start from circle's top-left corner,
+                                        // then apply the calculated offsets from getPhotoSizing
+                                        const imageX = circleCenterX - PHOTO_RADIUS + photoSizing.translateX;
+                                        const imageY = circleCenterY - PHOTO_RADIUS + photoSizing.translateY;
+                                        
                                         return (
                                             <>
                                                 <defs>
-                                                    <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
+                                                    <clipPath id={clipId}>
                                                         <circle
-                                                            cx={photoX + PHOTO_RADIUS}
-                                                            cy={photoY + PHOTO_RADIUS}
+                                                            cx={circleCenterX}
+                                                            cy={circleCenterY}
                                                             r={PHOTO_RADIUS}
                                                         />
                                                     </clipPath>
                                                 </defs>
                                                 <image
                                                     href={node.person.profilePhotoUrl}
-                                                    x={photoX}
-                                                    y={photoY}
-                                                    width={photoSizing.coverWidth}
-                                                    height={photoSizing.coverHeight}
+                                                    x={imageX}
+                                                    y={imageY}
+                                                    width={photoSizing.coverWidth * photoSizing.zoom}
+                                                    height={photoSizing.coverHeight * photoSizing.zoom}
                                                     clipPath={`url(#${clipId})`}
-                                                    preserveAspectRatio="xMidYMid slice"
-                                                    style={photoSizing.zoom !== 1 || photoSizing.translateX !== 0 || photoSizing.translateY !== 0
-                                                        ? {
-                                                            transformBox: 'fill-box',
-                                                            transformOrigin: '0 0',
-                                                            transform: `translate(${photoSizing.translateX}px, ${photoSizing.translateY}px) scale(${photoSizing.zoom})`
-                                                        }
-                                                        : undefined}
+                                                    preserveAspectRatio="none"
                                                 />
                                             </>
                                         );
