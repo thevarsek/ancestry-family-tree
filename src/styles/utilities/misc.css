@@ -35,8 +35,16 @@
     width: 2rem !important;
 }
 
+.w-12 {
+    width: 3rem !important;
+}
+
 .h-8 {
     height: 2rem !important;
+}
+
+.h-12 {
+    height: 3rem !important;
 }
 
 .h-0\.5 {

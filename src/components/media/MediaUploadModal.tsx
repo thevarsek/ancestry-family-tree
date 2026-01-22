@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
@@ -70,6 +70,9 @@ export function MediaUploadModal({
     const [focusY, setFocusY] = useState(0.5);
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0, focusX: 0.5, focusY: 0.5 });
+    const [previewSize, setPreviewSize] = useState({ width: 256, height: 256 });
+    const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+    const previewRef = useRef<HTMLDivElement | null>(null);
 
     const people = useQuery(api.people.list, { treeId, limit: 200 });
     const sources = useQuery(api.sources.list, { treeId, limit: 200 });
@@ -79,42 +82,128 @@ export function MediaUploadModal({
     const createMedia = useMutation(api.media.create);
     const setProfilePhoto = useMutation(api.people.setProfilePhoto);
 
-    // Handle drag functionality
+    const coverSize = useMemo(() => {
+        if (!imageSize.width || !imageSize.height) {
+            return { width: previewSize.width, height: previewSize.height };
+        }
+
+        const scale = Math.max(
+            previewSize.width / imageSize.width,
+            previewSize.height / imageSize.height
+        );
+
+        return {
+            width: imageSize.width * scale,
+            height: imageSize.height * scale
+        };
+    }, [imageSize.height, imageSize.width, previewSize.height, previewSize.width]);
+
+    const scaledSize = useMemo(() => {
+        return {
+            width: coverSize.width * zoomLevel,
+            height: coverSize.height * zoomLevel
+        };
+    }, [coverSize.height, coverSize.width, zoomLevel]);
+
+    const maxTranslateX = previewSize.width - scaledSize.width;
+    const maxTranslateY = previewSize.height - scaledSize.height;
+    const canPanX = maxTranslateX < 0;
+    const canPanY = maxTranslateY < 0;
+
+    const translateX = canPanX ? maxTranslateX * focusX : (previewSize.width - scaledSize.width) / 2;
+    const translateY = canPanY ? maxTranslateY * focusY : (previewSize.height - scaledSize.height) / 2;
+
     useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
+        const previewElement = previewRef.current;
+        if (!previewElement) return;
+
+        const updateSize = () => {
+            const rect = previewElement.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            setPreviewSize({ width: rect.width, height: rect.height });
+        };
+
+        updateSize();
+
+        if (typeof ResizeObserver === 'undefined') return;
+        const observer = new ResizeObserver(() => updateSize());
+        observer.observe(previewElement);
+        return () => observer.disconnect();
+    }, []);
+
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handlePointerMove = (e: PointerEvent) => {
             if (!isDragging) return;
 
-            const previewElement = document.querySelector('.profile-photo-preview') as HTMLElement;
+            if (!imageSize.width || !imageSize.height) return;
+
+            const previewElement = previewRef.current;
             if (!previewElement) return;
 
             const rect = previewElement.getBoundingClientRect();
-            // Calculate how much we've moved in pixels
+            if (!rect.width || !rect.height) return;
+
             const deltaX = e.clientX - dragStart.x;
             const deltaY = e.clientY - dragStart.y;
 
-            // Convert pixels to focus coordinates (0-1)
-            // Focus moves OPPOSITE to image movement
-            const newFocusX = dragStart.focusX - (deltaX / rect.width) / zoomLevel;
-            const newFocusY = dragStart.focusY - (deltaY / rect.height) / zoomLevel;
+            const coverScale = Math.max(
+                rect.width / imageSize.width,
+                rect.height / imageSize.height
+            );
+            const nextScaledWidth = imageSize.width * coverScale * zoomLevel;
+            const nextScaledHeight = imageSize.height * coverScale * zoomLevel;
+            const nextMaxTranslateX = rect.width - nextScaledWidth;
+            const nextMaxTranslateY = rect.height - nextScaledHeight;
+            const nextCanPanX = nextMaxTranslateX < 0;
+            const nextCanPanY = nextMaxTranslateY < 0;
 
-            setFocusX(Math.max(0, Math.min(1, newFocusX)));
-            setFocusY(Math.max(0, Math.min(1, newFocusY)));
+            if (nextCanPanX) {
+                const startTranslateX = nextMaxTranslateX * dragStart.focusX;
+                const newTranslateX = startTranslateX + deltaX;
+                const clampedTranslateX = Math.min(0, Math.max(nextMaxTranslateX, newTranslateX));
+                setFocusX(clampedTranslateX / nextMaxTranslateX);
+            } else {
+                setFocusX(0.5);
+            }
+
+            if (nextCanPanY) {
+                const startTranslateY = nextMaxTranslateY * dragStart.focusY;
+                const newTranslateY = startTranslateY + deltaY;
+                const clampedTranslateY = Math.min(0, Math.max(nextMaxTranslateY, newTranslateY));
+                setFocusY(clampedTranslateY / nextMaxTranslateY);
+            } else {
+                setFocusY(0.5);
+            }
         };
 
-        const handleMouseUp = () => {
+        const handlePointerUp = () => {
             setIsDragging(false);
         };
 
-        if (isDragging) {
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
-        }
+        document.addEventListener('pointermove', handlePointerMove);
+        document.addEventListener('pointerup', handlePointerUp);
+        document.addEventListener('pointercancel', handlePointerUp);
 
         return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener('pointermove', handlePointerMove);
+            document.removeEventListener('pointerup', handlePointerUp);
+            document.removeEventListener('pointercancel', handlePointerUp);
         };
-    }, [isDragging, dragStart, zoomLevel]);
+    }, [dragStart.focusX, dragStart.focusY, dragStart.x, dragStart.y, imageSize.height, imageSize.width, isDragging, zoomLevel]);
+
+    useEffect(() => {
+        if (!imageSize.width || !imageSize.height) return;
+        if (!previewSize.width || !previewSize.height) return;
+
+        if (scaledSize.width <= previewSize.width) {
+            setFocusX(0.5);
+        }
+        if (scaledSize.height <= previewSize.height) {
+            setFocusY(0.5);
+        }
+    }, [imageSize.height, imageSize.width, previewSize.height, previewSize.width, scaledSize.height, scaledSize.width]);
 
     useEffect(() => {
         if (defaultLinks) {
@@ -264,9 +353,11 @@ export function MediaUploadModal({
                                 <label className="input-label">Profile Photo Crop</label>
                                 <div className="space-y-4">
                                     <div
+                                        ref={previewRef}
                                         className="profile-photo-preview relative mx-auto border border-border rounded-md overflow-hidden bg-gray-100 cursor-move select-none"
-                                        style={{ width: '256px', height: '256px' }}
-                                        onMouseDown={(e) => {
+                                        style={{ width: '256px', height: '256px', touchAction: 'none' }}
+                                        onPointerDown={(e) => {
+                                            if (e.button !== 0) return;
                                             setIsDragging(true);
                                             setDragStart({
                                                 x: e.clientX,
@@ -274,18 +365,38 @@ export function MediaUploadModal({
                                                 focusX: focusX,
                                                 focusY: focusY
                                             });
+                                            e.currentTarget.setPointerCapture?.(e.pointerId);
                                             e.preventDefault();
+                                        }}
+                                        onPointerUp={(e) => {
+                                            e.currentTarget.releasePointerCapture?.(e.pointerId);
                                         }}
                                     >
                                         <img
                                             src={URL.createObjectURL(file)}
                                             alt="Preview"
-                                            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                                            className="absolute top-0 left-0 pointer-events-none"
                                             style={{
-                                                objectPosition: `${focusX * 100}% ${focusY * 100}%`,
-                                                transform: `scale(${zoomLevel})`,
+                                                width: `${coverSize.width}px`,
+                                                height: `${coverSize.height}px`,
+                                                transform: `translate(${translateX}px, ${translateY}px) scale(${zoomLevel})`,
+                                                transformOrigin: 'top left',
                                             }}
-                                            onLoad={(e) => URL.revokeObjectURL((e.target as HTMLImageElement).src)}
+                                            onLoad={(e) => {
+                                                const target = e.target as HTMLImageElement;
+                                                setImageSize({
+                                                    width: target.naturalWidth,
+                                                    height: target.naturalHeight
+                                                });
+                                                const previewElement = previewRef.current;
+                                                if (previewElement) {
+                                                    const rect = previewElement.getBoundingClientRect();
+                                                    if (rect.width && rect.height) {
+                                                        setPreviewSize({ width: rect.width, height: rect.height });
+                                                    }
+                                                }
+                                                URL.revokeObjectURL(target.src);
+                                            }}
                                         />
                                         {/* Circular Mask Overlay - Square div, circular hole */}
                                         <div

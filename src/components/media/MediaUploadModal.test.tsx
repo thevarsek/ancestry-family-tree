@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMutation, useQuery } from 'convex/react';
@@ -24,6 +24,23 @@ describe('MediaUploadModal', () => {
     beforeEach(() => {
         vi.mocked(useQuery).mockReturnValue([]);
 
+        if (!('createObjectURL' in URL)) {
+            Object.defineProperty(URL, 'createObjectURL', {
+                value: vi.fn(() => 'blob:preview'),
+                writable: true,
+            });
+        } else {
+            vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:preview');
+        }
+        if (!('revokeObjectURL' in URL)) {
+            Object.defineProperty(URL, 'revokeObjectURL', {
+                value: vi.fn(),
+                writable: true,
+            });
+        } else {
+            vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+        }
+
         let mutationCall = 0;
         const mutationResults = [
             generateUploadUrlMutation,
@@ -44,7 +61,8 @@ describe('MediaUploadModal', () => {
     });
 
     afterEach(() => {
-        vi.clearAllMocks();
+        cleanup();
+        vi.restoreAllMocks();
     });
 
     it('uploads media and creates a record', async () => {
@@ -72,6 +90,47 @@ describe('MediaUploadModal', () => {
                 title: 'Family Photo',
                 type: 'photo',
             }));
+        });
+    });
+
+    it('updates focus when dragging horizontally', async () => {
+        const user = userEvent.setup();
+        render(
+            <MediaUploadModal
+                treeId={treeId}
+                ownerPersonId={personId}
+                setAsProfilePhoto
+                onClose={vi.fn()}
+            />
+        );
+
+        const file = new File(['photo'], 'photo.png', { type: 'image/png' });
+        const input = screen.getByLabelText(/upload file/i);
+        await user.upload(input, file);
+
+        const image = await screen.findByAltText('Preview') as HTMLImageElement;
+        const preview = image.closest('.profile-photo-preview') as HTMLElement;
+        vi.spyOn(preview, 'getBoundingClientRect').mockReturnValue({
+            width: 256,
+            height: 256,
+            top: 0,
+            left: 0,
+            right: 256,
+            bottom: 256,
+            x: 0,
+            y: 0,
+            toJSON: () => ({}),
+        });
+
+        Object.defineProperty(image, 'naturalWidth', { value: 512, configurable: true });
+        Object.defineProperty(image, 'naturalHeight', { value: 256, configurable: true });
+        fireEvent.load(image);
+
+        fireEvent.pointerDown(preview, { clientX: 100, clientY: 100, button: 0, pointerId: 1 });
+        fireEvent.pointerMove(document, { clientX: 150, clientY: 100, pointerId: 1 });
+        fireEvent.pointerUp(document, { clientX: 150, clientY: 100, pointerId: 1 });
+        await waitFor(() => {
+            expect(image.style.transform).toBe('translate(-78px, 0px) scale(1)');
         });
     });
 });
