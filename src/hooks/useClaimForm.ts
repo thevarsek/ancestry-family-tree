@@ -96,6 +96,7 @@ export function useClaimForm({
     const [selectedSourceIds, setSelectedSourceIds] = useState<Id<"sources">[]>([]);
     const [selectedMediaIds, setSelectedMediaIds] = useState<Id<"media">[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [hasInitialized, setHasInitialized] = useState(false);
 
     // Mutations
     const createClaim = useMutation(api.claims.create);
@@ -122,10 +123,14 @@ export function useClaimForm({
             setSelectedSourceIds(
                 (initialClaim.sources ?? []).map((source: Doc<"sources">) => source._id)
             );
+            // Mark as initialized after setting all values to prevent the claimType
+            // change effect from clearing dateTo
+            setHasInitialized(true);
             return;
         }
 
         // Reset form for new claim
+        setHasInitialized(true);
         if (defaultClaimType) {
             setClaimType(defaultClaimType);
         }
@@ -147,13 +152,16 @@ export function useClaimForm({
         }
     }, [initialClaim, linkedMedia]);
 
-    // Reset current-related fields when claim type changes
+    // Reset current-related fields when claim type changes (but not during initial load)
     useEffect(() => {
+        if (!hasInitialized) {
+            return;
+        }
         if (!currentEligible) {
             setIsCurrent(false);
             setDateTo('');
         }
-    }, [currentEligible]);
+    }, [currentEligible, hasInitialized]);
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();

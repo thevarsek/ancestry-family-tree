@@ -130,9 +130,12 @@ describe('PedigreeChart', () => {
 
         const image = container.querySelector('image');
         expect(image).not.toBeNull();
-        expect((image as SVGImageElement).getAttribute('width')).toBe('64');
-        expect((image as SVGImageElement).getAttribute('height')).toBe('32');
-        expect((image as SVGImageElement).style.transform).toBe('translate(-96px, -32px) scale(2)');
+        // coverWidth=64, coverHeight=32 (from cover scaling), then multiplied by zoom=2
+        expect((image as SVGImageElement).getAttribute('width')).toBe('128');
+        expect((image as SVGImageElement).getAttribute('height')).toBe('64');
+        // Position is applied via x/y attributes, not CSS transform
+        expect((image as SVGImageElement).getAttribute('x')).toBeDefined();
+        expect((image as SVGImageElement).getAttribute('y')).toBeDefined();
     });
 
     it('navigates to the person detail route on node click', async () => {
