@@ -6,7 +6,7 @@ type MediaWithUrl = Doc<"media"> & {
     links?: Array<{ entityType: string; entityId: string }>;
 };
 
-export function MediaCard({ media }: { media: MediaWithUrl }) {
+export function MediaCard({ media, onDelete }: { media: MediaWithUrl; onDelete?: () => void }) {
     const isImage = media.type === 'photo' && media.storageUrl;
     const isAudio = media.type === 'audio' && media.storageUrl;
     const ocrStatus = media.ocrStatus ? media.ocrStatus.replace('_', ' ') : null;
@@ -37,7 +37,18 @@ export function MediaCard({ media }: { media: MediaWithUrl }) {
                             <p className="text-xs text-muted">{media.description}</p>
                         )}
                     </div>
-                    <span className="badge badge-neutral capitalize">{media.type}</span>
+                    <div className="flex items-center gap-2">
+                        <span className="badge badge-neutral capitalize">{media.type}</span>
+                        {onDelete && (
+                            <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={onDelete}
+                            >
+                                Remove
+                            </button>
+                        )}
+                    </div>
                 </div>
                 {media.role === 'profile_photo' && (
                     <span className="badge badge-accent">Profile Photo</span>

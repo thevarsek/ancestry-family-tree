@@ -97,6 +97,31 @@ describe('PedigreeChart', () => {
         expect(element.scrollTop).toBe(40);
     });
 
+    it('positions profile photos using zoom and focus', () => {
+        const root = {
+            ...createPerson('person_root', 'Root'),
+            profilePhotoUrl: 'https://photos.local/profile.jpg',
+            profilePhotoZoom: 2,
+            profilePhotoFocusX: 1,
+            profilePhotoFocusY: 1,
+        };
+
+        const { container } = render(
+            <MemoryRouter>
+                <PedigreeChart
+                    treeId={treeId}
+                    people={[root]}
+                    relationships={[]}
+                    rootPersonId={root._id}
+                />
+            </MemoryRouter>
+        );
+
+        const image = container.querySelector('image');
+        expect(image).not.toBeNull();
+        expect((image as SVGImageElement).style.transform).toBe('translate(-32px, -32px) scale(2)');
+    });
+
     it('navigates to the person detail route on node click', async () => {
         const root = createPerson('person_root', 'Root');
         const user = userEvent.setup();

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { MediaCard } from './MediaCard';
 import { MediaUploadModal } from './MediaUploadModal';
+import { ConfirmModal } from '../ui/ConfirmModal';
 
 type PersonClaim = Doc<"claims"> & { place?: Doc<"places"> | null };
 type MediaWithRelations = Doc<"media"> & {
@@ -23,7 +24,11 @@ export function MediaList({
 }) {
     const media = useQuery(api.media.listByPerson, { personId }) as MediaWithRelations[] | undefined;
     const people = useQuery(api.people.list, { treeId, limit: 200 });
+    const removeMedia = useMutation(api.media.remove);
     const [showUpload, setShowUpload] = useState(false);
+    const [pendingDelete, setPendingDelete] = useState<MediaWithRelations | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const peopleMap = useMemo(() => {
         return new Map((people ?? []).map((person) => [person._id, person]));
@@ -32,6 +37,31 @@ export function MediaList({
     if (media === undefined || people === undefined) {
         return <div className="spinner spinner-lg mx-auto mt-8" />;
     }
+
+    const handleRequestDelete = (item: MediaWithRelations) => {
+        setDeleteError(null);
+        setPendingDelete(item);
+    };
+
+    const handleCloseDelete = () => {
+        setPendingDelete(null);
+        setDeleteError(null);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!pendingDelete) return;
+        setIsDeleting(true);
+        setDeleteError(null);
+        try {
+            await removeMedia({ mediaId: pendingDelete._id });
+            setPendingDelete(null);
+        } catch (error) {
+            console.error('Failed to remove media:', error);
+            setDeleteError('Unable to remove this media right now. Please try again.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -53,7 +83,7 @@ export function MediaList({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {media.map((item: MediaWithRelations) => (
                         <div key={item._id} className="space-y-2">
-                            <MediaCard media={item} />
+                            <MediaCard media={item} onDelete={() => handleRequestDelete(item)} />
                             {(item.taggedPersonIds?.length ?? 0) > 0 && (
                                 <div className="text-xs text-muted">
                                     Tagged: {item.taggedPersonIds
@@ -77,6 +107,18 @@ export function MediaList({
                     claims={claims}
                     onClose={() => setShowUpload(false)}
                     onSuccess={() => setShowUpload(false)}
+                />
+            )}
+            {pendingDelete && (
+                <ConfirmModal
+                    title="Remove Media"
+                    description={`Removing \"${pendingDelete.title}\" will delete it from this tree and any linked events or sources. This action cannot be undone.`}
+                    confirmLabel="Remove Media"
+                    busyLabel="Removing..."
+                    isBusy={isDeleting}
+                    errorMessage={deleteError}
+                    onClose={handleCloseDelete}
+                    onConfirm={handleConfirmDelete}
                 />
             )}
         </div>

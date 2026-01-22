@@ -6,6 +6,7 @@ import type { Doc, Id } from '../../convex/_generated/dataModel';
 import { AddRelationshipModal } from '../components/people/AddRelationshipModal';
 import { PersonModal } from '../components/people/PersonList';
 import { RelationshipCard } from '../components/people/RelationshipCard';
+import { ProfilePhoto } from '../components/people/ProfilePhoto';
 import { AddClaimModal } from '../components/claims/AddClaimModal';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -173,19 +174,12 @@ export function PersonPage() {
                 <div className="flex gap-6 items-start">
                     <div className="avatar avatar-xl text-3xl overflow-hidden">
                         {profilePhoto?.storageUrl ? (
-                            <img
+                            <ProfilePhoto
                                 src={profilePhoto.storageUrl}
                                 alt={`${person.givenNames ?? ''} ${person.surnames ?? ''}`}
-                                className="w-full h-full object-cover"
-                                data-zoom={profilePhoto.zoomLevel ? 'true' : undefined}
-                                style={
-                                    profilePhoto.zoomLevel && profilePhoto.focusX !== undefined && profilePhoto.focusY !== undefined
-                                        ? {
-                                            objectPosition: `${profilePhoto.focusX * 100}% ${profilePhoto.focusY * 100}%`,
-                                            transform: `scale(${profilePhoto.zoomLevel})`,
-                                        }
-                                        : undefined
-                                }
+                                zoomLevel={profilePhoto.zoomLevel}
+                                focusX={profilePhoto.focusX}
+                                focusY={profilePhoto.focusY}
                             />
                         ) : (
                             <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>

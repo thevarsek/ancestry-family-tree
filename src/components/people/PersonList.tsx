@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../../convex/_generated/api';
 import { Doc, Id } from '../../../convex/_generated/dataModel';
 import { MediaUploadModal } from '../media/MediaUploadModal';
+import { ProfilePhoto } from './ProfilePhoto';
 
 type PersonGender = 'unknown' | 'male' | 'female' | 'other';
 
@@ -249,19 +250,12 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
                             {(() => {
                                 const photo = getProfilePhoto(person.profilePhotoId);
                                 return photo?.storageUrl ? (
-                                    <img
+                                    <ProfilePhoto
                                         src={photo.storageUrl}
                                         alt={`${person.givenNames ?? ''} ${person.surnames ?? ''}`}
-                                        className="w-full h-full object-cover"
-                                        data-zoom={photo.zoomLevel ? 'true' : undefined}
-                                        style={
-                                            photo.zoomLevel && photo.focusX !== undefined && photo.focusY !== undefined
-                                                ? {
-                                                    objectPosition: `${photo.focusX * 100}% ${photo.focusY * 100}%`,
-                                                    transform: `scale(${photo.zoomLevel})`,
-                                                }
-                                                : undefined
-                                        }
+                                        zoomLevel={photo.zoomLevel}
+                                        focusX={photo.focusX}
+                                        focusY={photo.focusY}
                                     />
                                 ) : (
                                     <span>{(person.givenNames?.[0] || '') + (person.surnames?.[0] || '')}</span>

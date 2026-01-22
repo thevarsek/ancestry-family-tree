@@ -562,6 +562,80 @@ export const updateLinks = mutation({
     }
 });
 
+export const remove = mutation({
+    args: { mediaId: v.id("media") },
+    handler: async (ctx, args) => {
+        const media = await ctx.db.get(args.mediaId);
+        if (!media) {
+            throw new Error("Media not found");
+        }
+
+        const { userId } = await requireTreeAdmin(ctx, media.treeId);
+        const now = Date.now();
+
+        const owner = await ctx.db.get(media.ownerPersonId);
+        if (owner?.profilePhotoId === args.mediaId) {
+            await ctx.db.patch(owner._id, { profilePhotoId: undefined, updatedAt: now });
+        }
+
+        const mediaPeople = await ctx.db
+            .query("mediaPeople")
+            .withIndex("by_media", (q) => q.eq("mediaId", args.mediaId))
+            .collect();
+
+        const mediaLinks = await ctx.db
+            .query("mediaLinks")
+            .withIndex("by_media", (q) => q.eq("mediaId", args.mediaId))
+            .collect();
+
+        await Promise.all(mediaPeople.map((link) => ctx.db.delete(link._id)));
+        await Promise.all(mediaLinks.map((link) => ctx.db.delete(link._id)));
+
+        const documents = await ctx.db
+            .query("documents")
+            .withIndex("by_media", (q) => q.eq("mediaId", args.mediaId))
+            .collect();
+
+        for (const document of documents) {
+            const chunks = await ctx.db
+                .query("documentChunks")
+                .withIndex("by_document", (q) => q.eq("documentId", document._id))
+                .collect();
+
+            for (const chunk of chunks) {
+                const searchEntries = await ctx.db
+                    .query("searchableContent")
+                    .withIndex("by_entity", (q) =>
+                        q.eq("entityType", "document_chunk").eq("entityId", chunk._id)
+                    )
+                    .collect();
+
+                await Promise.all(searchEntries.map((entry) => ctx.db.delete(entry._id)));
+                await ctx.db.delete(chunk._id);
+            }
+
+            await ctx.db.delete(document._id);
+        }
+
+        if (media.storageKind === "convex_file" && media.storageId) {
+            await ctx.storage.delete(media.storageId);
+        }
+
+        await ctx.db.delete(args.mediaId);
+
+        await ctx.db.insert("auditLog", {
+            treeId: media.treeId,
+            userId,
+            action: "media_deleted",
+            entityType: "media",
+            entityId: args.mediaId,
+            timestamp: now
+        });
+
+        return args.mediaId;
+    }
+});
+
 export const updateDocumentProcessing = mutation({
     args: {
         mediaId: v.id("media"),

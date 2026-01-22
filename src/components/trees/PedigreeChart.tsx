@@ -275,9 +275,10 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                                         height={32}
                                         style={{
                                             clipPath: 'circle(16px at center)',
-                                            transformOrigin: `${NODE_WIDTH / 2}px ${24}px`,
+                                            transformBox: 'fill-box',
+                                            transformOrigin: '0 0',
                                             transform: node.person.profilePhotoZoom && node.person.profilePhotoFocusX !== undefined && node.person.profilePhotoFocusY !== undefined
-                                                ? `scale(${node.person.profilePhotoZoom}) translate(${(0.5 - node.person.profilePhotoFocusX) * 32}px, ${(0.5 - node.person.profilePhotoFocusY) * 32}px)`
+                                                ? `translate(${(32 - 32 * node.person.profilePhotoZoom) * node.person.profilePhotoFocusX}px, ${(32 - 32 * node.person.profilePhotoZoom) * node.person.profilePhotoFocusY}px) scale(${node.person.profilePhotoZoom})`
                                                 : undefined
                                         }}
                                         preserveAspectRatio="xMidYMid slice"
