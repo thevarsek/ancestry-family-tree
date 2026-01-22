@@ -15,6 +15,7 @@ import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { PersonSourceList } from '../components/sources/PersonSourceList';
 import { MediaList } from '../components/media/MediaList';
 import { formatClaimDate } from '../utils/claimDates';
+import { getClaimTitle, sortClaimsForTimeline } from '../utils/claimSorting';
 
 type PersonClaim = Doc<"claims"> & {
     place?: Doc<"places"> | null;
@@ -82,6 +83,11 @@ export function PersonPage() {
             (a.place?.displayName ?? '').localeCompare(b.place?.displayName ?? '')
         );
     }, [placeClaims]);
+
+    const sortedClaims = useMemo(() => {
+        if (!person) return [];
+        return sortClaimsForTimeline(person.claims as PersonClaim[]);
+    }, [person]);
 
     const mapPlaces = useMemo(
         () => placeGroups
@@ -255,13 +261,13 @@ export function PersonPage() {
                                         +
                                     </button>
                                 </div>
-                                {person.claims.length === 0 ? (
+                                {sortedClaims.length === 0 ? (
                                     <div className="text-center py-8 text-muted">
                                         No events or claims recorded yet.
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
-                                        {person.claims.map((claim: PersonClaim) => (
+                                        {sortedClaims.map((claim: PersonClaim) => (
                                             <div key={claim._id} className="flex gap-4">
                                                 <div className="w-24 text-sm text-muted text-right pt-1">
                                                     {formatClaimDate(claim.value) || 'Unknown Date'}
@@ -271,9 +277,7 @@ export function PersonPage() {
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div>
                                                             <h4 className="font-medium capitalize">
-                                                                {claim.claimType === 'custom'
-                                                                    ? (claim.value.customFields as { title?: string } | undefined)?.title || 'Custom event'
-                                                                    : claim.claimType.replace('_', ' ')}
+                                                                {getClaimTitle(claim)}
                                                             </h4>
                                                             <p className="text-sm text-muted">
                                                                 {claim.place?.displayName || claim.value.description || 'No details yet'}
