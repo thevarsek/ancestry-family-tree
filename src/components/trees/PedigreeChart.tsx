@@ -371,21 +371,34 @@ function renderParentLinks({
         const leftmostParent = parentNodes.reduce((left, parent) => (parent.x < left.x ? parent : left));
         const gutterX = leftmostParent.x + nodeWidth + horizontalGap / 2;
 
-        const child = links[0].to;
-        const toX = child.x;
-        const toY = child.y + nodeHeight / 2;
-
         return (
             <g key={`family-${familyId}`}>
-                {links.map((link, index) => {
-                    const fromX = link.from.x + nodeWidth;
-                    const fromY = link.from.y + nodeHeight / 2;
+                {parentNodes.map((parent, index) => {
+                    const fromX = parent.x + nodeWidth;
+                    const fromY = parent.y + nodeHeight / 2;
                     const parentToUnion = `M ${fromX} ${fromY} L ${gutterX} ${fromY} L ${gutterX} ${unionY}`;
+                    const familyHighlight = links.some((link) => link.isHighlighted);
 
                     return (
                         <path
                             key={`parent-${index}`}
                             d={parentToUnion}
+                            stroke={familyHighlight ? 'var(--color-accent)' : 'var(--color-border)'}
+                            strokeWidth={familyHighlight ? 3 : 2}
+                            fill="none"
+                            opacity={familyHighlight ? 0.95 : 0.7}
+                        />
+                    );
+                })}
+                {links.map((link, index) => {
+                    const toX = link.to.x;
+                    const toY = link.to.y + nodeHeight / 2;
+                    const unionToChild = `M ${gutterX} ${unionY} L ${gutterX} ${toY} L ${toX} ${toY}`;
+
+                    return (
+                        <path
+                            key={`child-${index}`}
+                            d={unionToChild}
                             stroke={link.isHighlighted ? 'var(--color-accent)' : 'var(--color-border)'}
                             strokeWidth={link.isHighlighted ? 3 : 2}
                             fill="none"
@@ -393,13 +406,6 @@ function renderParentLinks({
                         />
                     );
                 })}
-                <path
-                    d={`M ${gutterX} ${unionY} L ${gutterX} ${toY} L ${toX} ${toY}`}
-                    stroke={links[0].isHighlighted ? 'var(--color-accent)' : 'var(--color-border)'}
-                    strokeWidth={links[0].isHighlighted ? 3 : 2}
-                    fill="none"
-                    opacity={links[0].isHighlighted ? 0.95 : 0.7}
-                />
             </g>
         );
     });
