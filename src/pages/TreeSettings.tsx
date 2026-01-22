@@ -1,18 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAction, useQuery, useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
 import type { Doc, Id } from '../../convex/_generated/dataModel';
+import { api } from '../../convex/_generated/api';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
+import { useErrorHandler } from '../hooks/useErrorHandler';
+
+// Types for query results
+type TreeWithRole = Doc<"trees"> & { role: "admin" | "user" };
+type TreeMember = { userId: Id<"users">; name: string; email: string; role: "admin" | "user" };
+type TreeInvitation = Doc<"invitations">;
 
 export function TreeSettings() {
     const { treeId } = useParams<{ treeId: string }>();
-    const tree = useQuery(api.trees.get, treeId ? { treeId: treeId as Id<"trees"> } : "skip");
-    const members = useQuery(api.trees.getMembers, treeId ? { treeId: treeId as Id<"trees"> } : "skip");
+    const tree = useQuery(api.trees.get, treeId ? { treeId: treeId as Id<"trees"> } : "skip") as TreeWithRole | null | undefined;
+    const members = useQuery(api.trees.getMembers, treeId ? { treeId: treeId as Id<"trees"> } : "skip") as TreeMember[] | undefined;
     const invitations = useQuery(
         api.trees.getInvitations,
         treeId && tree?.role === 'admin' ? { treeId: treeId as Id<"trees"> } : "skip"
-    );
+    ) as TreeInvitation[] | undefined;
 
     const updateTree = useMutation(api.trees.update);
     const updateMemberRole = useMutation(api.trees.updateMemberRole);
@@ -33,6 +39,7 @@ export function TreeSettings() {
     const [cancelTarget, setCancelTarget] = useState<{ invitationId: Id<"invitations">; email: string } | null>(null);
     const [isCanceling, setIsCanceling] = useState(false);
     const [cancelError, setCancelError] = useState<string | null>(null);
+    const { handleErrorWithToast, showSuccess } = useErrorHandler();
 
     // Update local state when tree data loads
     useEffect(() => {
@@ -57,9 +64,10 @@ export function TreeSettings() {
                 name,
                 description,
             });
+            showSuccess('Tree updated successfully');
             setStatusMessage({ type: 'success', message: 'Tree updated successfully.' });
         } catch (error) {
-            console.error(error);
+            handleErrorWithToast(error, { operation: 'update tree' });
             setStatusMessage({ type: 'error', message: 'Failed to update tree.' });
         } finally {
             setIsSaving(false);
@@ -73,9 +81,10 @@ export function TreeSettings() {
                 userId,
                 role: newRole,
             });
+            showSuccess('Member role updated');
             setStatusMessage({ type: 'success', message: 'Member role updated.' });
         } catch (error) {
-            console.error(error);
+            handleErrorWithToast(error, { operation: 'update member role' });
             setStatusMessage({ type: 'error', message: 'Failed to update role.' });
         }
     };
@@ -92,10 +101,11 @@ export function TreeSettings() {
                 email: inviteEmail,
                 role: inviteRole,
             });
+            showSuccess(`Invitation sent to ${inviteEmail}`);
             setInviteStatus({ type: 'success', message: `Invitation sent to ${inviteEmail}` });
             setInviteEmail('');
         } catch (error) {
-            console.error(error);
+            handleErrorWithToast(error, { operation: 'send invitation' });
             setInviteStatus({ type: 'error', message: "Failed to send invitation." });
         }
     };
@@ -109,10 +119,11 @@ export function TreeSettings() {
                 treeId: tree._id,
                 userId: removeTarget.userId,
             });
+            showSuccess(`Removed ${removeTarget.name} from the tree`);
             setStatusMessage({ type: 'success', message: `Removed ${removeTarget.name} from the tree.` });
             setRemoveTarget(null);
         } catch (error) {
-            console.error(error);
+            handleErrorWithToast(error, { operation: 'remove member' });
             setRemoveError('Failed to remove member.');
         } finally {
             setIsRemoving(false);
@@ -132,10 +143,11 @@ export function TreeSettings() {
                 treeId: tree._id,
                 invitationId: cancelTarget.invitationId,
             });
+            showSuccess(`Canceled invitation for ${cancelTarget.email}`);
             setStatusMessage({ type: 'success', message: `Canceled invitation for ${cancelTarget.email}.` });
             setCancelTarget(null);
         } catch (error) {
-            console.error(error);
+            handleErrorWithToast(error, { operation: 'cancel invitation' });
             setCancelError('Failed to cancel invitation.');
         } finally {
             setIsCanceling(false);
@@ -143,7 +155,7 @@ export function TreeSettings() {
     };
 
     const safeMembers = (members ?? []).filter(
-        (member: any): member is {
+        (member): member is {
             userId: Id<"users">;
             name: string;
             email: string;

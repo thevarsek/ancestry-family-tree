@@ -1,42 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
 import { PersonModal } from '../people/PersonList';
-
-type LinkEntityType = 'claim' | 'source' | 'place';
-
-type PersonClaim = Doc<"claims"> & { place?: Doc<"places"> | null };
-
-type MediaUploadLink = {
-    entityType: LinkEntityType;
-    entityId: string;
-};
-
-const MAX_FILE_BYTES = 25 * 1024 * 1024;
-
-const supportedMimeTypes = new Set([
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/gif',
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'audio/mpeg',
-    'audio/mp3',
-    'audio/mp4',
-    'audio/m4a',
-    'audio/wav',
-    'audio/x-wav',
-    'audio/ogg'
-]);
-
-function inferMediaType(mimeType: string) {
-    if (mimeType.startsWith('image/')) return 'photo' as const;
-    if (mimeType.startsWith('audio/')) return 'audio' as const;
-    if (mimeType.includes('pdf') || mimeType.includes('wordprocessingml')) return 'document' as const;
-    return 'document' as const;
-}
+import { useProfilePhotoCrop } from '../../hooks/useProfilePhotoCrop';
+import { MAX_FILE_BYTES, supportedMimeTypes, inferMediaType, type MediaUploadLink } from './mediaUploadConstants';
+import type { PersonClaim } from '../../types/claims';
+import { handleError } from '../../utils/errorHandling';
 
 export function MediaUploadModal({
     treeId,
@@ -65,145 +35,17 @@ export function MediaUploadModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showPersonModal, setShowPersonModal] = useState(false);
-    const [zoomLevel, setZoomLevel] = useState(1);
-    const [focusX, setFocusX] = useState(0.5);
-    const [focusY, setFocusY] = useState(0.5);
-    const [isDragging, setIsDragging] = useState(false);
-    const [dragStart, setDragStart] = useState({ x: 0, y: 0, focusX: 0.5, focusY: 0.5 });
-    const [previewSize, setPreviewSize] = useState({ width: 256, height: 256 });
-    const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
-    const previewRef = useRef<HTMLDivElement | null>(null);
 
-    const people = useQuery(api.people.list, { treeId, limit: 200 });
-    const sources = useQuery(api.sources.list, { treeId, limit: 200 });
-    const places = useQuery(api.places.list, { treeId, limit: 200 });
+    // Profile photo crop hook for pan/zoom functionality
+    const crop = useProfilePhotoCrop();
+
+    const people = useQuery(api.people.list, { treeId, limit: 200 }) as Doc<"people">[] | undefined;
+    const sources = useQuery(api.sources.list, { treeId, limit: 200 }) as Doc<"sources">[] | undefined;
+    const places = useQuery(api.places.list, { treeId, limit: 200 }) as Doc<"places">[] | undefined;
 
     const generateUploadUrl = useMutation(api.media.generateUploadUrl);
     const createMedia = useMutation(api.media.create);
     const setProfilePhoto = useMutation(api.people.setProfilePhoto);
-
-    const coverSize = useMemo(() => {
-        if (!imageSize.width || !imageSize.height) {
-            return { width: previewSize.width, height: previewSize.height };
-        }
-
-        const scale = Math.max(
-            previewSize.width / imageSize.width,
-            previewSize.height / imageSize.height
-        );
-
-        return {
-            width: imageSize.width * scale,
-            height: imageSize.height * scale
-        };
-    }, [imageSize.height, imageSize.width, previewSize.height, previewSize.width]);
-
-    const scaledSize = useMemo(() => {
-        return {
-            width: coverSize.width * zoomLevel,
-            height: coverSize.height * zoomLevel
-        };
-    }, [coverSize.height, coverSize.width, zoomLevel]);
-
-    const maxTranslateX = previewSize.width - scaledSize.width;
-    const maxTranslateY = previewSize.height - scaledSize.height;
-    const canPanX = maxTranslateX < 0;
-    const canPanY = maxTranslateY < 0;
-
-    const translateX = canPanX ? maxTranslateX * focusX : (previewSize.width - scaledSize.width) / 2;
-    const translateY = canPanY ? maxTranslateY * focusY : (previewSize.height - scaledSize.height) / 2;
-
-    useEffect(() => {
-        const previewElement = previewRef.current;
-        if (!previewElement) return;
-
-        const updateSize = () => {
-            const rect = previewElement.getBoundingClientRect();
-            if (!rect.width || !rect.height) return;
-            setPreviewSize({ width: rect.width, height: rect.height });
-        };
-
-        updateSize();
-
-        if (typeof ResizeObserver === 'undefined') return;
-        const observer = new ResizeObserver(() => updateSize());
-        observer.observe(previewElement);
-        return () => observer.disconnect();
-    }, []);
-
-    useEffect(() => {
-        if (!isDragging) return;
-
-        const handlePointerMove = (e: PointerEvent) => {
-            if (!isDragging) return;
-
-            if (!imageSize.width || !imageSize.height) return;
-
-            const previewElement = previewRef.current;
-            if (!previewElement) return;
-
-            const rect = previewElement.getBoundingClientRect();
-            if (!rect.width || !rect.height) return;
-
-            const deltaX = e.clientX - dragStart.x;
-            const deltaY = e.clientY - dragStart.y;
-
-            const coverScale = Math.max(
-                rect.width / imageSize.width,
-                rect.height / imageSize.height
-            );
-            const nextScaledWidth = imageSize.width * coverScale * zoomLevel;
-            const nextScaledHeight = imageSize.height * coverScale * zoomLevel;
-            const nextMaxTranslateX = rect.width - nextScaledWidth;
-            const nextMaxTranslateY = rect.height - nextScaledHeight;
-            const nextCanPanX = nextMaxTranslateX < 0;
-            const nextCanPanY = nextMaxTranslateY < 0;
-
-            if (nextCanPanX) {
-                const startTranslateX = nextMaxTranslateX * dragStart.focusX;
-                const newTranslateX = startTranslateX + deltaX;
-                const clampedTranslateX = Math.min(0, Math.max(nextMaxTranslateX, newTranslateX));
-                setFocusX(clampedTranslateX / nextMaxTranslateX);
-            } else {
-                setFocusX(0.5);
-            }
-
-            if (nextCanPanY) {
-                const startTranslateY = nextMaxTranslateY * dragStart.focusY;
-                const newTranslateY = startTranslateY + deltaY;
-                const clampedTranslateY = Math.min(0, Math.max(nextMaxTranslateY, newTranslateY));
-                setFocusY(clampedTranslateY / nextMaxTranslateY);
-            } else {
-                setFocusY(0.5);
-            }
-        };
-
-        const handlePointerUp = () => {
-            setIsDragging(false);
-        };
-
-        document.addEventListener('pointermove', handlePointerMove);
-        document.addEventListener('pointerup', handlePointerUp);
-        document.addEventListener('pointercancel', handlePointerUp);
-
-        return () => {
-            document.removeEventListener('pointermove', handlePointerMove);
-            document.removeEventListener('pointerup', handlePointerUp);
-            document.removeEventListener('pointercancel', handlePointerUp);
-        };
-    }, [dragStart.focusX, dragStart.focusY, dragStart.x, dragStart.y, imageSize.height, imageSize.width, isDragging, zoomLevel]);
-
-    useEffect(() => {
-        if (!imageSize.width || !imageSize.height) return;
-        if (!previewSize.width || !previewSize.height) return;
-
-        if (scaledSize.width <= previewSize.width) {
-            setFocusX(0.5);
-        }
-        if (scaledSize.height <= previewSize.height) {
-            setFocusY(0.5);
-        }
-    }, [imageSize.height, imageSize.width, previewSize.height, previewSize.width, scaledSize.height, scaledSize.width]);
 
     useEffect(() => {
         if (defaultLinks) {
@@ -272,8 +114,8 @@ export function MediaUploadModal({
             const { storageId } = await uploadResponse.json() as { storageId: Id<'_storage'> };
             const mimeType = file.type;
             const mediaType = inferMediaType(mimeType);
-            const width = imageSize.width || undefined;
-            const height = imageSize.height || undefined;
+            const width = crop.coverSize.width || undefined;
+            const height = crop.coverSize.height || undefined;
 
             const mediaId = await createMedia({
                 treeId,
@@ -288,9 +130,9 @@ export function MediaUploadModal({
                 fileSizeBytes: file.size,
                 width: mediaType === 'photo' ? width : undefined,
                 height: mediaType === 'photo' ? height : undefined,
-                zoomLevel: setAsProfilePhoto ? zoomLevel : undefined,
-                focusX: setAsProfilePhoto ? focusX : undefined,
-                focusY: setAsProfilePhoto ? focusY : undefined,
+                zoomLevel: setAsProfilePhoto ? crop.zoomLevel : undefined,
+                focusX: setAsProfilePhoto ? crop.focusX : undefined,
+                focusY: setAsProfilePhoto ? crop.focusY : undefined,
                 taggedPersonIds: taggedPersonIds.length ? taggedPersonIds : undefined,
                 links: selectedLinks.length ? selectedLinks : undefined
             });
@@ -302,7 +144,7 @@ export function MediaUploadModal({
             onSuccess?.(mediaId);
             onClose();
         } catch (submitError) {
-            console.error('Failed to upload media:', submitError);
+            handleError(submitError, { operation: 'upload media' });
             setError('Unable to upload media. Please try again.');
         } finally {
             setIsSubmitting(false);
@@ -357,48 +199,28 @@ export function MediaUploadModal({
                                 <label className="input-label">Profile Photo Crop</label>
                                 <div className="space-y-4">
                                     <div
-                                        ref={previewRef}
+                                        ref={crop.previewRef}
                                         className="profile-photo-preview relative mx-auto border border-border rounded-md overflow-hidden bg-gray-100 cursor-move select-none"
                                         style={{ width: '256px', height: '256px', touchAction: 'none' }}
-                                        onPointerDown={(e) => {
-                                            if (e.button !== 0) return;
-                                            setIsDragging(true);
-                                            setDragStart({
-                                                x: e.clientX,
-                                                y: e.clientY,
-                                                focusX: focusX,
-                                                focusY: focusY
-                                            });
-                                            e.currentTarget.setPointerCapture?.(e.pointerId);
-                                            e.preventDefault();
-                                        }}
-                                        onPointerUp={(e) => {
-                                            e.currentTarget.releasePointerCapture?.(e.pointerId);
-                                        }}
+                                        onPointerDown={crop.handlePointerDown}
+                                        onPointerUp={crop.handlePointerUp}
                                     >
                                         <img
                                             src={URL.createObjectURL(file)}
                                             alt="Preview"
                                             className="absolute top-0 left-0 pointer-events-none"
                                             style={{
-                                                width: `${coverSize.width}px`,
-                                                height: `${coverSize.height}px`,
-                                                transform: `translate(${translateX}px, ${translateY}px) scale(${zoomLevel})`,
+                                                width: `${crop.coverSize.width}px`,
+                                                height: `${crop.coverSize.height}px`,
+                                                transform: `translate(${crop.translateX}px, ${crop.translateY}px) scale(${crop.zoomLevel})`,
                                                 transformOrigin: 'top left',
                                             }}
                                             onLoad={(e) => {
                                                 const target = e.target as HTMLImageElement;
-                                                setImageSize({
+                                                crop.setImageSize({
                                                     width: target.naturalWidth,
                                                     height: target.naturalHeight
                                                 });
-                                                const previewElement = previewRef.current;
-                                                if (previewElement) {
-                                                    const rect = previewElement.getBoundingClientRect();
-                                                    if (rect.width && rect.height) {
-                                                        setPreviewSize({ width: rect.width, height: rect.height });
-                                                    }
-                                                }
                                                 URL.revokeObjectURL(target.src);
                                             }}
                                         />
@@ -417,15 +239,11 @@ export function MediaUploadModal({
                                     </div>
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center">
-                                            <label className="text-sm font-medium">Zoom: {zoomLevel.toFixed(2)}x</label>
+                                            <label className="text-sm font-medium">Zoom: {crop.zoomLevel.toFixed(2)}x</label>
                                             <button
                                                 type="button"
                                                 className="text-xs text-accent hover:underline"
-                                                onClick={() => {
-                                                    setZoomLevel(1);
-                                                    setFocusX(0.5);
-                                                    setFocusY(0.5);
-                                                }}
+                                                onClick={crop.reset}
                                             >
                                                 Reset
                                             </button>
@@ -435,8 +253,8 @@ export function MediaUploadModal({
                                             min="0.1"
                                             max="5"
                                             step="0.01"
-                                            value={zoomLevel}
-                                            onChange={(e) => setZoomLevel(parseFloat(e.target.value))}
+                                            value={crop.zoomLevel}
+                                            onChange={(e) => crop.setZoomLevel(parseFloat(e.target.value))}
                                             className="w-full"
                                         />
                                     </div>

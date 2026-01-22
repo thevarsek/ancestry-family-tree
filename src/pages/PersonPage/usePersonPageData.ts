@@ -1,13 +1,12 @@
 import { useMemo } from "react";
 import { useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
+import { api } from "../../../convex/_generated/api";
 import { sortClaimsForTimeline } from "../../utils/claimSorting";
+import type { PersonClaim } from "../../types/claims";
 
-export type PersonClaim = Doc<"claims"> & {
-    place?: Doc<"places"> | null;
-    sources?: Doc<"sources">[];
-};
+// Re-export PersonClaim from shared types for backward compatibility
+export type { PersonClaim } from "../../types/claims";
 
 export type PersonRelationships = {
     parents: { relationship: Doc<"relationships">; person?: Doc<"people"> | null }[];
@@ -49,17 +48,17 @@ export function usePersonPageData(personId: string | undefined): UsePersonPageDa
     const person = useQuery(
         api.people.getWithClaims,
         personId ? { personId: personId as Id<"people"> } : "skip"
-    );
+    ) as (Doc<"people"> & { claims: PersonClaim[] }) | undefined;
 
     const relationships = useQuery(
         api.people.getRelationships,
         personId ? { personId: personId as Id<"people"> } : "skip"
-    );
+    ) as PersonRelationships | undefined;
 
     const profilePhoto = useQuery(
         api.media.get,
         person?.profilePhotoId ? { mediaId: person.profilePhotoId } : "skip"
-    );
+    ) as EnrichedMedia | undefined | null;
 
     // Collect all relationship people for batch photo fetching
     const relationshipPeople = useMemo(() => {
@@ -68,13 +67,13 @@ export function usePersonPageData(personId: string | undefined): UsePersonPageDa
             .concat(relationships.spouses)
             .concat(relationships.siblings)
             .concat(relationships.children)
-            .map((relation) => relation.person)
+            .map((relation: { relationship: Doc<"relationships">; person?: Doc<"people"> | null }) => relation.person)
             .filter((p): p is Doc<"people"> => Boolean(p));
     }, [relationships]);
 
     const relationshipPhotoIds = useMemo(() => {
         const ids = relationshipPeople
-            .map((p) => p.profilePhotoId)
+            .map((p: Doc<"people">) => p.profilePhotoId)
             .filter((id): id is Id<"media"> => Boolean(id));
         return Array.from(new Set(ids));
     }, [relationshipPeople]);
@@ -82,10 +81,10 @@ export function usePersonPageData(personId: string | undefined): UsePersonPageDa
     const relationshipPhotos = useQuery(
         api.media.getUrls,
         relationshipPhotoIds.length ? { mediaIds: relationshipPhotoIds } : "skip"
-    );
+    ) as ProfilePhotoData[] | undefined;
 
     const relationshipPhotoMap = useMemo(() => {
-        return new Map((relationshipPhotos ?? []).map((item) => [item.mediaId, item]));
+        return new Map((relationshipPhotos ?? []).map((item: ProfilePhotoData) => [item.mediaId, item]));
     }, [relationshipPhotos]);
 
     const getRelationshipPhoto = useMemo(() => {

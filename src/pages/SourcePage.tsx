@@ -8,6 +8,7 @@ import { MediaCard } from '../components/media/MediaCard';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { formatClaimDate } from '../utils/claimDates';
 import { getClaimTitle } from '../utils/claimSorting';
+import { handleError } from '../utils/errorHandling';
 
 type SourceClaim = Doc<"claims"> & {
     place?: Doc<"places"> | null;
@@ -246,7 +247,7 @@ export function SourcePage() {
                                 navigate(`/tree/${treeId}`);
                             }
                         } catch (error) {
-                            console.error('Failed to delete source:', error);
+                            handleError(error, { operation: 'delete source' });
                             setDeleteError('Unable to delete this source. Please try again.');
                         } finally {
                             setIsDeleting(false);

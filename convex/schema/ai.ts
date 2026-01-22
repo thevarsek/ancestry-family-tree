@@ -1,6 +1,26 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
+/**
+ * Validator for AI-suggested claims from research findings.
+ * Each suggestion includes the claim type, value, and confidence.
+ */
+const suggestedClaimValidator = v.object({
+    claimType: v.string(),
+    personId: v.optional(v.id("people")),
+    value: v.object({
+        date: v.optional(v.string()),
+        description: v.optional(v.string()),
+        placeDescription: v.optional(v.string()),
+    }),
+    confidence: v.union(
+        v.literal("high"),
+        v.literal("medium"),
+        v.literal("low")
+    ),
+    extractedText: v.optional(v.string()),
+});
+
 export const aiTables = {
     chatSessions: defineTable({
         treeId: v.id("trees"),
@@ -51,7 +71,7 @@ export const aiTables = {
             v.literal("rejected"),
             v.literal("converted_to_claim")
         ),
-        suggestedClaims: v.optional(v.any()),
+        suggestedClaims: v.optional(v.array(suggestedClaimValidator)),
         reviewedBy: v.optional(v.id("users")),
         reviewedAt: v.optional(v.number()),
         createdAt: v.number()

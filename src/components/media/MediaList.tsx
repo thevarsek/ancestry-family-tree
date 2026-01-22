@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
 import { MediaCard } from './MediaCard';
 import { MediaUploadModal } from './MediaUploadModal';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import type { PersonClaim } from '../../types/claims';
+import { handleError } from '../../utils/errorHandling';
 
-type PersonClaim = Doc<"claims"> & { place?: Doc<"places"> | null };
 type MediaWithRelations = Doc<"media"> & {
     storageUrl?: string | null;
     taggedPersonIds?: Id<"people">[];
@@ -23,7 +24,7 @@ export function MediaList({
     claims: PersonClaim[];
 }) {
     const media = useQuery(api.media.listByPerson, { personId }) as MediaWithRelations[] | undefined;
-    const people = useQuery(api.people.list, { treeId, limit: 200 });
+    const people = useQuery(api.people.list, { treeId, limit: 200 }) as Doc<"people">[] | undefined;
     const removeMedia = useMutation(api.media.remove);
     const [showUpload, setShowUpload] = useState(false);
     const [pendingDelete, setPendingDelete] = useState<MediaWithRelations | null>(null);
@@ -56,7 +57,7 @@ export function MediaList({
             await removeMedia({ mediaId: pendingDelete._id });
             setPendingDelete(null);
         } catch (error) {
-            console.error('Failed to remove media:', error);
+            handleError(error, { operation: 'remove media' });
             setDeleteError('Unable to remove this media right now. Please try again.');
         } finally {
             setIsDeleting(false);
@@ -112,7 +113,7 @@ export function MediaList({
             {pendingDelete && (
                 <ConfirmModal
                     title="Remove Media"
-                    description={`Removing \"${pendingDelete.title}\" will delete it from this tree and any linked events or sources. This action cannot be undone.`}
+                    description={`Removing "${pendingDelete.title}" will delete it from this tree and any linked events or sources. This action cannot be undone.`}
                     confirmLabel="Remove Media"
                     busyLabel="Removing..."
                     isBusy={isDeleting}

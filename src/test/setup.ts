@@ -10,7 +10,7 @@ if (typeof window !== 'undefined' && !('PointerEvent' in window)) {
         }
     }
 
-    (window as any).PointerEvent = PointerEventShim as unknown as typeof PointerEvent;
+    (window as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent = PointerEventShim as unknown as typeof PointerEvent;
 }
 
 if (!Element.prototype.setPointerCapture) {

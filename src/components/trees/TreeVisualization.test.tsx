@@ -31,15 +31,29 @@ const treeData = {
     relationships: [] as Doc<'relationships'>[],
 };
 
+const timelineData = {
+    people: [person],
+    relationships: [] as Doc<'relationships'>[],
+    lifeEvents: [],
+    eventTypes: [],
+};
+
 describe('TreeVisualization', () => {
     beforeEach(() => {
-        vi.mocked(useQuery).mockImplementation((...queryArgs) => {
-            const [, args] = queryArgs;
+        // Track which call we're on to return appropriate data
+        // Component calls: 1) getTreeData, 2) getTimelineData, 3) getUrls (skipped)
+        let callCount = 0;
+        (vi.mocked(useQuery) as ReturnType<typeof vi.fn>).mockImplementation((_queryFn, args) => {
+            callCount++;
             if (args === 'skip') {
                 return undefined;
             }
             if (args && typeof args === 'object' && 'mediaIds' in args) {
                 return [];
+            }
+            // First call is getTreeData, second is getTimelineData
+            if (callCount === 2) {
+                return timelineData;
             }
             return treeData;
         });

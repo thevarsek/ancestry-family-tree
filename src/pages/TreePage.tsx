@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from 'convex/react';
+import { Doc, Id } from '../../convex/_generated/dataModel';
 import { api } from '../../convex/_generated/api';
-import { Id } from '../../convex/_generated/dataModel';
 import { PersonList } from '../components/people/PersonList';
 import { PlaceList } from '../components/places/PlaceList';
 import { TreeVisualization } from '../components/trees/TreeVisualization';
@@ -15,7 +15,7 @@ export function TreePage() {
     // Validate tree access
     const tree = useQuery(api.trees.get,
         treeId ? { treeId: treeId as Id<"trees"> } : "skip"
-    );
+    ) as Doc<"trees"> | null | undefined;
 
     if (tree === undefined) {
         return <div className="spinner spinner-lg mx-auto mt-12" />;

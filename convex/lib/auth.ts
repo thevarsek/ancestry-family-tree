@@ -82,10 +82,3 @@ export async function requireTreeAdmin(
 ) {
     return requireTreeAccess(ctx, treeId, "admin");
 }
-
-/**
- * Check if a user can edit (is admin)
- */
-export function canEdit(role: "admin" | "user"): boolean {
-    return role === "admin";
-}

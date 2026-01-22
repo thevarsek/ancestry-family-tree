@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
+import { handleError } from '../../utils/errorHandling';
 
 export function EditSourceModal({
     source,
@@ -37,7 +38,7 @@ export function EditSourceModal({
             if (onSuccess) onSuccess();
             onClose();
         } catch (error) {
-            console.error('Failed to update source:', error);
+            handleError(error, { operation: 'update source' });
         } finally {
             setIsSubmitting(false);
         }

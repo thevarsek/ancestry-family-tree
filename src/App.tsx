@@ -7,6 +7,7 @@ import { TreeSettings } from './pages/TreeSettings';
 import { PersonPage } from './pages/PersonPage';
 import { LifeEventPage } from './pages/LifeEventPage';
 import { SourcePage } from './pages/SourcePage';
+import { ToastProvider } from './components/ui/Toast';
 import { UserButton } from "@clerk/clerk-react";
 import './App.css';
 
@@ -60,13 +61,15 @@ function AppLayout() {
 function App() {
     return (
         <BrowserRouter>
-            <Unauthenticated>
-                <SignIn />
-            </Unauthenticated>
+            <ToastProvider>
+                <Unauthenticated>
+                    <SignIn />
+                </Unauthenticated>
 
-            <Authenticated>
-                <AppLayout />
-            </Authenticated>
+                <Authenticated>
+                    <AppLayout />
+                </Authenticated>
+            </ToastProvider>
         </BrowserRouter>
     );
 }

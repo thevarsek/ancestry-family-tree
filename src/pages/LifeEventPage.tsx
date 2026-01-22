@@ -3,14 +3,15 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { api } from '../../convex/_generated/api';
 import type { Doc, Id } from '../../convex/_generated/dataModel';
+import { api } from '../../convex/_generated/api';
 import { AddClaimModal } from '../components/claims/AddClaimModal';
 import { MediaCard } from '../components/media/MediaCard';
 import { defaultLeafletIcon } from '../components/places/leafletIcon';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { formatClaimDate } from '../utils/claimDates';
 import { getClaimTitle, sortClaimsForTimeline } from '../utils/claimSorting';
+import { handleError } from '../utils/errorHandling';
 
 type ClaimWithDetails = Doc<"claims"> & {
     place?: Doc<"places"> | null;
@@ -331,7 +332,7 @@ export function LifeEventPage() {
                             await removeClaim({ claimId: claimId as Id<"claims"> });
                             navigate(`/tree/${treeId}/person/${personId}`);
                         } catch (error) {
-                            console.error('Failed to delete claim:', error);
+                            handleError(error, { operation: 'delete claim' });
                             setDeleteError('Unable to delete this event. Please try again.');
                         } finally {
                             setIsDeleting(false);

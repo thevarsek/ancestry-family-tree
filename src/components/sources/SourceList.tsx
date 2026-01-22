@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from 'convex/react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
 import { CreateSourceModal } from './CreateSourceModal';
 
 export function SourceList({ treeId }: { treeId: Id<"trees"> }) {
-    const sources = useQuery(api.sources.list, { treeId, limit: 100 });
+    const sources = useQuery(api.sources.list, { treeId, limit: 100 }) as Doc<"sources">[] | undefined;
     const [showCreate, setShowCreate] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const navigate = useNavigate();

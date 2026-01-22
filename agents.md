@@ -47,3 +47,52 @@ This document outlines the operational standards and coding best practices for A
 ## 5. UX Patterns
 
 - **Destructive Actions**: Use in-app modals for confirmations instead of browser `confirm`/`alert`, and guard against double-triggered actions.
+
+## 6. Toast Notifications & Error Handling
+
+The app has a centralized toast notification system for user feedback. **Always use toasts** for success/error messages instead of inline alerts.
+
+### Quick Usage
+
+```tsx
+import { useErrorHandler } from '../hooks/useErrorHandler';
+
+function MyComponent() {
+  const { handleErrorWithToast, showSuccess, showError, showInfo } = useErrorHandler();
+
+  const handleSave = async () => {
+    try {
+      await saveData();
+      showSuccess('Changes saved!');
+    } catch (error) {
+      handleErrorWithToast(error, { operation: 'save data' });
+      // This logs the error AND shows a toast like "Failed to save data: <error message>"
+    }
+  };
+}
+```
+
+### Available Methods
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `showSuccess(msg)` | Green success toast | `showSuccess('Tree created!')` |
+| `showError(msg)` | Red error toast | `showError('Invalid input')` |
+| `showInfo(msg)` | Blue info toast | `showInfo('Processing...')` |
+| `handleErrorWithToast(error, context)` | Log error + show toast | See above |
+
+### Direct Toast Access (less common)
+
+```tsx
+import { useToast } from '../components/ui/Toast';
+
+const { success, error, info, dismiss, dismissAll } = useToast();
+success('Message', 3000); // Optional duration in ms (default 5000, use 0 for persistent)
+```
+
+### Key Files
+
+- `src/components/ui/Toast.tsx` - ToastProvider and useToast hook
+- `src/hooks/useErrorHandler.ts` - Combines error handling with toasts
+- `src/utils/errorHandling.ts` - Core error handling utilities
+- `src/styles/components/toast.css` - Toast styles

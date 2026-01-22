@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { PlaceModal } from './PlaceModal';
@@ -11,7 +11,7 @@ import { formatClaimDate } from '../../utils/claimDates';
 
 export function PlaceList({ treeId }: { treeId: Id<"trees"> }) {
     const navigate = useNavigate();
-    const places = useQuery(api.places.list, { treeId, limit: 100 });
+    const places = useQuery(api.places.list, { treeId, limit: 100 }) as Doc<"places">[] | undefined;
     const [selectedPlaceId, setSelectedPlaceId] = useState<Id<"places"> | null>(null);
     const [showCreate, setShowCreate] = useState(false);
     const [editingPlace, setEditingPlace] = useState<Doc<'places'> | null>(null);
@@ -19,23 +19,23 @@ export function PlaceList({ treeId }: { treeId: Id<"trees"> }) {
     const selectedPlaceClaims = useQuery(
         api.places.getClaims,
         selectedPlaceId ? { placeId: selectedPlaceId } : 'skip'
-    );
+    ) as Array<Doc<"claims"> & { person: Doc<"people"> | null }> | undefined;
 
     // Client-side filtering
-    const filteredPlaces = places?.filter(p => {
+    const filteredPlaces = places?.filter((p: Doc<"places">) => {
         const text = `${p.displayName} ${p.city || ''} ${p.state || ''}`.toLowerCase();
         return text.includes(searchQuery.toLowerCase());
     });
 
     const mapPlaces = useMemo(
-        () => (places ?? []).filter((place) => place.latitude && place.longitude),
+        () => (places ?? []).filter((place: Doc<"places">) => place.latitude && place.longitude),
         [places]
     );
 
     const mapCenter = useMemo(() => {
         if (mapPlaces.length === 0) return [20, 0] as [number, number];
         const sum = mapPlaces.reduce(
-            (acc, place) => {
+            (acc, place: Doc<"places">) => {
                 acc.lat += place.latitude ?? 0;
                 acc.lng += place.longitude ?? 0;
                 return acc;

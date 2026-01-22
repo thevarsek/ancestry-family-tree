@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMutation, useQuery } from 'convex/react';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { CreateSourceModal } from './CreateSourceModal';
+import { ToastProvider } from '../ui/Toast';
 
 vi.mock('convex/react', () => ({
     useMutation: vi.fn(),
@@ -65,11 +66,13 @@ describe('CreateSourceModal', () => {
         const user = userEvent.setup();
 
         render(
-            <CreateSourceModal
-                treeId={treeId}
-                claims={[claim]}
-                onClose={onClose}
-            />
+            <ToastProvider>
+                <CreateSourceModal
+                    treeId={treeId}
+                    claims={[claim]}
+                    onClose={onClose}
+                />
+            </ToastProvider>
         );
 
         await user.type(

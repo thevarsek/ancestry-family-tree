@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import type { Doc, Id } from '../../convex/_generated/dataModel';
 import { TreeSettings } from './TreeSettings';
+import { ToastProvider } from '../components/ui/Toast';
 
 vi.mock('convex/react', () => ({
     useQuery: vi.fn(),
@@ -53,9 +54,11 @@ const cancelInvitationAction = cancelInvitation as unknown as ReturnType<typeof 
 const renderTreeSettings = () => {
     render(
         <MemoryRouter initialEntries={[`/tree/${treeId}/settings`]}>
-            <Routes>
-                <Route path="/tree/:treeId/settings" element={<TreeSettings />} />
-            </Routes>
+            <ToastProvider>
+                <Routes>
+                    <Route path="/tree/:treeId/settings" element={<TreeSettings />} />
+                </Routes>
+            </ToastProvider>
         </MemoryRouter>
     );
 };

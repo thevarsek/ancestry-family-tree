@@ -1,12 +1,35 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
 import { FanChart } from './FanChart';
 import { PedigreeChart } from './PedigreeChart';
 import { TimelineChart } from './TimelineChart';
 import { FilterableSelect, FilterableMultiSelect, type FilterableOption } from '../ui/FilterableSelect';
 import type { PersonWithDates, LifeEventClaim } from './timelineLayout';
+
+// Types for query results
+type TreeDataResult = {
+    people: Doc<"people">[];
+    relationships: Doc<"relationships">[];
+} | undefined;
+
+type TimelineDataResult = {
+    people: PersonWithDates[];
+    relationships: Doc<"relationships">[];
+    lifeEvents: LifeEventClaim[];
+    eventTypes: string[];
+} | undefined;
+
+type ProfilePhotoResult = Array<{
+    mediaId: Id<"media">;
+    storageUrl?: string | null;
+    zoomLevel?: number;
+    focusX?: number;
+    focusY?: number;
+    width?: number;
+    height?: number;
+}> | undefined;
 
 const chartOptions = [
     {
@@ -29,8 +52,8 @@ const chartOptions = [
 type ChartOptionId = typeof chartOptions[number]['id'];
 
 export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
-    const treeData = useQuery(api.people.getTreeData, { treeId });
-    const timelineData = useQuery(api.claims.getTimelineData, { treeId });
+    const treeData = useQuery(api.people.getTreeData, { treeId }) as TreeDataResult;
+    const timelineData = useQuery(api.claims.getTimelineData, { treeId }) as TimelineDataResult;
     const [rootPersonId, setRootPersonId] = useState<Id<"people"> | null>(null);
     const [activeChart, setActiveChart] = useState<ChartOptionId>('family-tree');
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -42,12 +65,12 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
 
     // Get profile photos for all people in the tree
     const profilePhotoIds = treeData?.people
-        ?.map((person) => person.profilePhotoId)
+        ?.map((person: Doc<"people">) => person.profilePhotoId)
         .filter((id): id is Id<"media"> => Boolean(id)) ?? [];
     const profilePhotos = useQuery(
         api.media.getUrls,
         profilePhotoIds.length ? { mediaIds: profilePhotoIds } : "skip"
-    );
+    ) as ProfilePhotoResult;
 
     // Set initial root person to the first person found or someone with relationships
     useEffect(() => {
@@ -64,12 +87,14 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
     useEffect(() => {
         if (timelineData) {
             // Initialize with all event types visible
-            if (timelineVisibleEventTypes.length === 0 && timelineData.eventTypes.length > 0) {
-                setTimelineVisibleEventTypes(timelineData.eventTypes);
+            const eventTypes = timelineData.eventTypes ?? [];
+            if (timelineVisibleEventTypes.length === 0 && eventTypes.length > 0) {
+                setTimelineVisibleEventTypes(eventTypes);
             }
             // Initialize with all people with birth dates visible
-            if (timelineVisiblePersonIds.length === 0 && timelineData.people.length > 0) {
-                const peopleWithBirthDates = timelineData.people
+            const people = timelineData.people ?? [];
+            if (timelineVisiblePersonIds.length === 0 && people.length > 0) {
+                const peopleWithBirthDates = people
                     .filter((p) => p.birthDate)
                     .map((p) => p._id);
                 setTimelineVisiblePersonIds(peopleWithBirthDates);

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { api } from "../../../convex/_generated/api";
 import { AddRelationshipModal } from "../../components/people/AddRelationshipModal";
 import { PersonModal } from "../../components/people/PersonList";
 import { ProfilePhoto } from "../../components/people/ProfilePhoto";
@@ -14,6 +14,7 @@ import { usePersonPageData, PersonClaim } from "./usePersonPageData";
 import { OverviewTab } from "./OverviewTab";
 import { RelationshipsTab } from "./RelationshipsTab";
 import { PlacesTab } from "./PlacesTab";
+import { handleError } from "../../utils/errorHandling";
 
 type TabType = "overview" | "relationships" | "places" | "sources" | "media";
 type ClaimType = "birth" | "death" | "marriage" | "divorce" | "residence" | "occupation" | "education" | "custom";
@@ -83,7 +84,7 @@ export function PersonPage() {
             await removeClaim({ claimId: pendingClaimDelete });
             setPendingClaimDelete(null);
         } catch (error) {
-            console.error("Failed to delete claim:", error);
+            handleError(error, { operation: 'delete claim' });
             setClaimDeleteError("Unable to delete this event. Please try again.");
         } finally {
             setIsDeletingClaim(false);
@@ -109,7 +110,7 @@ export function PersonPage() {
             await removeRelationship({ relationshipId: pendingRelationshipDelete });
             didRemove = true;
         } catch (error) {
-            console.error("Failed to remove relationship:", error);
+            handleError(error, { operation: 'remove relationship' });
             setRelationshipDeleteError("Unable to remove this relationship. Please try again.");
         } finally {
             setIsDeletingRelationship(false);

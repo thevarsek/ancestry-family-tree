@@ -1,19 +1,30 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
+import { useMemo, useState } from 'react';
+import { useQuery } from 'convex/react';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
 import { PlaceModal } from '../places/PlaceModal';
 import { MediaUploadModal } from '../media/MediaUploadModal';
 import { CreateSourceModal } from '../sources/CreateSourceModal';
 import { FilterableMultiSelect, FilterableSelect, type FilterableOption } from '../ui/FilterableSelect';
-
-type ClaimType =
-    | "birth" | "death" | "marriage" | "divorce"
-    | "residence" | "occupation" | "education"
-    | "workplace" | "military_service" | "immigration" | "emigration"
-    | "naturalization" | "religion" | "name_change" | "custom";
+import { useClaimForm, type InitialClaimData } from '../../hooks/useClaimForm';
+import {
+    type ClaimType,
+    CLAIM_TYPE_OPTIONS,
+    isSingleTaggable,
+    isMultiTaggable,
+} from '../../types/claims';
 
 type MediaWithUrl = Doc<"media"> & { storageUrl?: string | null };
+
+interface AddClaimModalProps {
+    treeId: Id<"trees">;
+    subjectId: string;
+    subjectType?: "person" | "relationship";
+    onClose: () => void;
+    onSuccess?: () => void;
+    defaultClaimType?: ClaimType;
+    initialClaim?: InitialClaimData | null;
+}
 
 export function AddClaimModal({
     treeId,
@@ -23,38 +34,16 @@ export function AddClaimModal({
     onSuccess,
     defaultClaimType,
     initialClaim
-}: {
-    treeId: Id<"trees">;
-    subjectId: string;
-    subjectType?: "person" | "relationship";
-    onClose: () => void;
-    onSuccess?: () => void;
-    defaultClaimType?: ClaimType;
-    initialClaim?: (Doc<"claims"> & { sources?: Doc<"sources">[] }) | null;
-}) {
-    const [claimType, setClaimType] = useState<ClaimType>(defaultClaimType ?? 'birth');
-    const [dateFrom, setDateFrom] = useState('');
-    const [dateTo, setDateTo] = useState('');
-    const [isCurrent, setIsCurrent] = useState(false);
-    const [placeId, setPlaceId] = useState<Id<"places"> | "">("");
-    const [description, setDescription] = useState('');
-    const [customTitle, setCustomTitle] = useState('');
-    const [taggedPeople, setTaggedPeople] = useState<Id<"people">[]>([]);
-    const [selectedSourceIds, setSelectedSourceIds] = useState<Id<"sources">[]>([]);
-    const [selectedMediaIds, setSelectedMediaIds] = useState<Id<"media">[]>([]);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+}: AddClaimModalProps) {
+    // Nested modal state
     const [showPlaceModal, setShowPlaceModal] = useState(false);
     const [showMediaUpload, setShowMediaUpload] = useState(false);
     const [showSourceModal, setShowSourceModal] = useState(false);
 
-    const createClaim = useMutation(api.claims.create);
-    const updateClaim = useMutation(api.claims.update);
-    const addSource = useMutation(api.claims.addSource);
-    const removeSource = useMutation(api.claims.removeSource);
-    const updateMediaLinks = useMutation(api.media.updateLinks);
-    const places = useQuery(api.places.list, { treeId, limit: 100 });
-    const people = useQuery(api.people.list, { treeId, limit: 200 });
-    const sources = useQuery(api.sources.list, { treeId, limit: 200 });
+    // Data queries
+    const places = useQuery(api.places.list, { treeId, limit: 100 }) as Doc<"places">[] | undefined;
+    const people = useQuery(api.people.list, { treeId, limit: 200 }) as Doc<"people">[] | undefined;
+    const sources = useQuery(api.sources.list, { treeId, limit: 200 }) as Doc<"sources">[] | undefined;
     const mediaList = useQuery(
         api.media.listByPerson,
         subjectType === 'person' ? { personId: subjectId as Id<"people"> } : "skip"
@@ -64,187 +53,62 @@ export function AddClaimModal({
         initialClaim ? { treeId, entityType: "claim", entityId: initialClaim._id } : "skip"
     ) as MediaWithUrl[] | undefined;
 
-    const currentEligibleClaimTypes: ClaimType[] = ['residence', 'occupation', 'education', 'military_service'];
-    const isCurrentEligible = currentEligibleClaimTypes.includes(claimType);
+    // Form state via custom hook
+    const {
+        formState,
+        isSubmitting,
+        setClaimType,
+        setDateFrom,
+        setDateTo,
+        setIsCurrent,
+        setPlaceId,
+        setDescription,
+        setCustomTitle,
+        setTaggedPeople,
+        setSelectedSourceIds,
+        setSelectedMediaIds,
+        handleSubmit,
+        isCurrentEligible,
+        isEditing,
+    } = useClaimForm({
+        treeId,
+        subjectId,
+        subjectType,
+        defaultClaimType,
+        initialClaim,
+        linkedMedia,
+        onSuccess,
+        onClose,
+    });
 
-    useEffect(() => {
-        if (initialClaim) {
-            setClaimType(initialClaim.claimType as ClaimType);
-            setDateFrom(initialClaim.value.date ?? '');
-            setDateTo(initialClaim.value.dateEnd ?? '');
-            setIsCurrent(Boolean(initialClaim.value.isCurrent));
-            setPlaceId((initialClaim.value.placeId as Id<"places"> | undefined) ?? '');
-            setDescription(initialClaim.value.description ?? '');
-            const customFields = initialClaim.value.customFields as { title?: string; relatedPersonIds?: Id<"people">[] } | undefined;
-            setCustomTitle(customFields?.title ?? '');
-            setTaggedPeople(customFields?.relatedPersonIds ?? []);
-            setSelectedSourceIds(
-                (initialClaim.sources ?? []).map((source: Doc<"sources">) => source._id)
-            );
-            return;
-        }
+    const {
+        claimType,
+        dateFrom,
+        dateTo,
+        isCurrent,
+        placeId,
+        description,
+        customTitle,
+        taggedPeople,
+        selectedSourceIds,
+        selectedMediaIds,
+    } = formState;
 
-        if (defaultClaimType) {
-            setClaimType(defaultClaimType);
-        }
-        setDateFrom('');
-        setDateTo('');
-        setIsCurrent(false);
-        setPlaceId('');
-        setDescription('');
-        setCustomTitle('');
-        setTaggedPeople([]);
-        setSelectedSourceIds([]);
-        setSelectedMediaIds([]);
-    }, [defaultClaimType, initialClaim]);
-
-    useEffect(() => {
-        if (initialClaim && linkedMedia) {
-            setSelectedMediaIds(linkedMedia.map((item) => item._id));
-        }
-    }, [initialClaim, linkedMedia]);
-
-    useEffect(() => {
-        if (!isCurrentEligible) {
-            setIsCurrent(false);
-            setDateTo('');
-        }
-    }, [isCurrentEligible]);
-
-    const handleSubmit = async (e: FormEvent) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-
-        try {
-            const customFields = claimType === 'custom' && customTitle.trim()
-                ? { title: customTitle.trim() }
-                : undefined;
-            const isCurrentValue = isCurrentEligible && isCurrent ? true : undefined;
-            const dateEndValue = isCurrentEligible && !isCurrent ? dateTo || undefined : undefined;
-
-            if (initialClaim) {
-                await updateClaim({
-                    claimId: initialClaim._id,
-                    claimType,
-                    value: {
-                        date: dateFrom || undefined,
-                        dateEnd: dateEndValue,
-                        isCurrent: isCurrentValue,
-                        placeId: placeId || undefined,
-                        description: description || undefined,
-                        datePrecision: 'year',
-                        customFields,
-                    },
-                    relatedPersonIds: taggedPeople.length ? taggedPeople : undefined,
-                });
-
-                const existingSourceIds = new Set(
-                    (initialClaim.sources ?? []).map((source: Doc<"sources">) => source._id)
-                );
-                const nextSourceIds = new Set(selectedSourceIds);
-
-                const sourceAdds = selectedSourceIds.filter(
-                    (sourceId) => !existingSourceIds.has(sourceId)
-                );
-                const sourceRemovals = Array.from(existingSourceIds).filter(
-                    (sourceId) => !nextSourceIds.has(sourceId)
-                );
-
-                await Promise.all([
-                    ...sourceAdds.map((sourceId) =>
-                        addSource({ claimId: initialClaim._id, sourceId })
-                    ),
-                    ...sourceRemovals.map((sourceId) =>
-                        removeSource({ claimId: initialClaim._id, sourceId })
-                    ),
-                ]);
-
-                if (subjectType === 'person') {
-                    await updateMediaLinks({
-                        treeId,
-                        entityType: "claim",
-                        entityId: initialClaim._id,
-                        mediaIds: selectedMediaIds
-                    });
-                }
-            } else {
-                const claimId = await createClaim({
-                    treeId,
-                    subjectType,
-                    subjectId,
-                    claimType,
-                    value: {
-                        date: dateFrom || undefined,
-                        dateEnd: dateEndValue,
-                        isCurrent: isCurrentValue,
-                        placeId: placeId || undefined,
-                        description: description || undefined,
-                        datePrecision: 'year', // Default for MVP
-                        customFields,
-                    },
-                    relatedPersonIds: taggedPeople.length ? taggedPeople : undefined,
-                    status: 'accepted', // Default for direct add
-                    confidence: 'high',
-                }) as Id<"claims">;
-
-                await Promise.all(
-                    selectedSourceIds.map((sourceId) =>
-                        addSource({ claimId, sourceId })
-                    )
-                );
-
-                if (subjectType === 'person') {
-                    await updateMediaLinks({
-                        treeId,
-                        entityType: "claim",
-                        entityId: claimId,
-                        mediaIds: selectedMediaIds
-                    });
-                }
-            }
-
-            if (onSuccess) onSuccess();
-            onClose();
-        } catch (error) {
-            console.error("Failed to add claim:", error);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const claimTypes: { value: ClaimType, label: string }[] = [
-        { value: 'birth', label: 'Birth' },
-        { value: 'death', label: 'Death' },
-        { value: 'marriage', label: 'Marriage' },
-        { value: 'divorce', label: 'Divorce' },
-        { value: 'residence', label: 'Residence' },
-        { value: 'occupation', label: 'Occupation' },
-        { value: 'workplace', label: 'Workplace' },
-        { value: 'education', label: 'Education' },
-        { value: 'military_service', label: 'Military Service' },
-        { value: 'immigration', label: 'Immigration' },
-        { value: 'emigration', label: 'Emigration' },
-        { value: 'naturalization', label: 'Naturalization' },
-        { value: 'religion', label: 'Religion' },
-        { value: 'name_change', label: 'Name Change' },
-        { value: 'custom', label: 'Other Event' },
-    ];
-
-    const singleTaggableClaimTypes: ClaimType[] = ['marriage'];
-    const multiTaggableClaimTypes: ClaimType[] = ['divorce', 'custom'];
-    const isSingleTaggable = singleTaggableClaimTypes.includes(claimType);
-    const isMultiTaggable = multiTaggableClaimTypes.includes(claimType);
+    // Computed values
+    const singleTaggable = isSingleTaggable(claimType);
+    const multiTaggable = isMultiTaggable(claimType);
     const availablePeople = (people ?? []).filter(
         (person) => person._id !== (subjectId as Id<"people">)
     );
     const canAttachMedia = subjectType === 'person';
 
+    // Memoized options for selects
     const claimTypeOptions = useMemo<FilterableOption[]>(() => {
-        return claimTypes.map((type) => ({
+        return CLAIM_TYPE_OPTIONS.map((type) => ({
             id: type.value,
             label: type.label,
         }));
-    }, [claimTypes]);
+    }, []);
 
     const placeOptions = useMemo<FilterableOption[]>(() => {
         return (places ?? []).map((place) => ({
@@ -287,11 +151,12 @@ export function AddClaimModal({
             <div className="modal-backdrop" onClick={onClose} />
             <div className="modal">
                 <div className="modal-header">
-                    <h3 className="modal-title">{initialClaim ? 'Edit Fact or Event' : 'Add Fact or Event'}</h3>
+                    <h3 className="modal-title">{isEditing ? 'Edit Fact or Event' : 'Add Fact or Event'}</h3>
                     <button className="btn btn-ghost btn-icon" onClick={onClose}>×</button>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body space-y-4">
+                        {/* Event Type */}
                         <div className="input-group">
                             <label className="input-label">Event Type</label>
                             <FilterableSelect
@@ -309,6 +174,7 @@ export function AddClaimModal({
                             />
                         </div>
 
+                        {/* Custom Title (for custom events) */}
                         {claimType === 'custom' && (
                             <div className="input-group">
                                 <label className="input-label">Event Title</label>
@@ -322,7 +188,8 @@ export function AddClaimModal({
                             </div>
                         )}
 
-                        {(isSingleTaggable || isMultiTaggable) && (
+                        {/* Tagged People (for marriage, divorce, custom) */}
+                        {(singleTaggable || multiTaggable) && (
                             <div className="input-group">
                                 <label className="input-label">
                                     {claimType === 'marriage' ? 'Partner' : 'Tag Other People'}
@@ -332,7 +199,7 @@ export function AddClaimModal({
                                         ? 'Select the spouse or partner for this event.'
                                         : 'They will see this event on their profile too.'}
                                 </p>
-                                {isSingleTaggable ? (
+                                {singleTaggable ? (
                                     <FilterableSelect
                                         label="people"
                                         placeholder="Select a person..."
@@ -360,6 +227,7 @@ export function AddClaimModal({
                             </div>
                         )}
 
+                        {/* Date and Place */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="input-group space-y-2">
                                 <label className="input-label">Date</label>
@@ -412,6 +280,7 @@ export function AddClaimModal({
                             </div>
                         </div>
 
+                        {/* Description */}
                         <div className="input-group">
                             <label className="input-label">Description / Details</label>
                             <textarea
@@ -423,6 +292,7 @@ export function AddClaimModal({
                             />
                         </div>
 
+                        {/* Sources */}
                         <div className="input-group">
                             <label className="input-label">Sources</label>
                             <p className="text-xs text-muted">Optional. Link sources to this event.</p>
@@ -445,6 +315,7 @@ export function AddClaimModal({
                             />
                         </div>
 
+                        {/* Media */}
                         {canAttachMedia && (
                             <div className="input-group">
                                 <label className="input-label">Media</label>
@@ -476,17 +347,19 @@ export function AddClaimModal({
                             className="btn btn-primary"
                             disabled={isSubmitting}
                         >
-                            {isSubmitting ? 'Saving...' : initialClaim ? 'Save Changes' : 'Save Fact'}
+                            {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Fact'}
                         </button>
                     </div>
                 </form>
             </div>
+
+            {/* Nested Modals */}
             {showPlaceModal && (
                 <PlaceModal
                     treeId={treeId}
                     onClose={() => setShowPlaceModal(false)}
-                    onSuccess={(placeId) => {
-                        setPlaceId(placeId);
+                    onSuccess={(newPlaceId) => {
+                        setPlaceId(newPlaceId);
                         setShowPlaceModal(false);
                     }}
                 />
@@ -498,7 +371,7 @@ export function AddClaimModal({
                     defaultLinks={initialClaim ? [{ entityType: "claim", entityId: initialClaim._id }] : undefined}
                     onClose={() => setShowMediaUpload(false)}
                     onSuccess={(mediaId) => {
-                        setSelectedMediaIds((prev) => [...prev, mediaId]);
+                        setSelectedMediaIds([...selectedMediaIds, mediaId]);
                         setShowMediaUpload(false);
                     }}
                 />
@@ -509,7 +382,7 @@ export function AddClaimModal({
                     personId={subjectId as Id<"people">}
                     onClose={() => setShowSourceModal(false)}
                     onSuccess={(sourceId) => {
-                        setSelectedSourceIds((prev) => [...prev, sourceId]);
+                        setSelectedSourceIds([...selectedSourceIds, sourceId]);
                         setShowSourceModal(false);
                     }}
                 />

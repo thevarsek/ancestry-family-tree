@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from 'convex/react';
+import { Doc, Id } from '../../../convex/_generated/dataModel';
 import { api } from '../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
-import { CreatePersonModal } from './PersonList';
+import { PersonModal } from './PersonList';
+import { handleError } from '../../utils/errorHandling';
 
 type RelationshipType = "parent_child" | "spouse" | "sibling" | "half_sibling" | "partner";
 type RelationshipRole = 'parent' | 'child';
@@ -31,10 +32,10 @@ export function AddRelationshipModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Search people to link
-    const people = useQuery(api.people.list, { treeId, limit: 100 });
+    const people = useQuery(api.people.list, { treeId, limit: 100 }) as Doc<"people">[] | undefined;
     const createRelationship = useMutation(api.relationships.create);
 
-    const filteredPeople = people?.filter(p => {
+    const filteredPeople = people?.filter((p: Doc<"people">) => {
         if (p._id === personId) return false; // Exclude self
         const name = `${p.givenNames} ${p.surnames}`.toLowerCase();
         return name.includes(searchQuery.toLowerCase());
@@ -99,7 +100,7 @@ export function AddRelationshipModal({
             if (onSuccess) onSuccess();
             onClose();
         } catch (error) {
-            console.error("Failed to create relationship:", error);
+            handleError(error, { operation: 'create relationship' });
         } finally {
             setIsSubmitting(false);
         }
@@ -327,10 +328,10 @@ export function AddRelationshipModal({
                 </div>
             </div>
             {showCreatePerson && (
-                <CreatePersonModal
+                <PersonModal
                     treeId={treeId}
                     onClose={() => setShowCreatePerson(false)}
-                    onSuccess={(newPersonId) => {
+                    onSuccess={(newPersonId: Id<"people">) => {
                         setSelectedPersonIds((prev) => [...prev, newPersonId]);
                         setShowCreatePerson(false);
                     }}

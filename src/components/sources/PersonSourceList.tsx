@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from 'convex/react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
 import { CreateSourceModal } from './CreateSourceModal';
-
-type PersonClaim = Doc<"claims"> & { place?: Doc<"places"> | null };
+import type { PersonClaim } from '../../types/claims';
 
 export function PersonSourceList({
     treeId,
@@ -16,7 +15,7 @@ export function PersonSourceList({
     personId: Id<"people">;
     claims: PersonClaim[];
 }) {
-    const sources = useQuery(api.sources.listByPerson, { personId });
+    const sources = useQuery(api.sources.listByPerson, { personId }) as Doc<"sources">[] | undefined;
     const [showCreate, setShowCreate] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const navigate = useNavigate();

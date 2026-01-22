@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
+import { handleError } from '../../utils/errorHandling';
 
 type PlaceFormState = {
     displayName: string;
@@ -122,7 +123,7 @@ export function PlaceModal({
             }
             onClose();
         } catch (error) {
-            console.error('Failed to save place:', error);
+            handleError(error, { operation: 'save place' });
         } finally {
             setIsSubmitting(false);
         }
@@ -140,7 +141,7 @@ export function PlaceModal({
             const results = (await response.json()) as NominatimResult[];
             setSearchResults(results);
         } catch (error) {
-            console.error('Failed to search locations:', error);
+            handleError(error, { operation: 'search locations' });
             setSearchResults([]);
         } finally {
             setIsSearching(false);

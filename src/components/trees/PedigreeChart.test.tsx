@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./chartExport', () => ({
     exportSvgChart: vi.fn(),
+    buildExportFileName: vi.fn((value: string) => value.toLowerCase().replace(/\s+/g, '-')),
 }));
 
 const treeId = 'tree_1' as Id<"trees">;

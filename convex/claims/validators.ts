@@ -22,6 +22,19 @@ export const claimTypeValidator = v.union(
 );
 
 /**
+ * Validator for custom fields in claim values.
+ * Used for:
+ * - Custom event titles
+ * - Related person IDs (e.g., for marriage/divorce claims)
+ */
+export const customFieldsValidator = v.optional(
+    v.object({
+        title: v.optional(v.string()),
+        relatedPersonIds: v.optional(v.array(v.id("people"))),
+    })
+);
+
+/**
  * Validator for claim value object
  */
 export const claimValueValidator = v.object({
@@ -41,7 +54,7 @@ export const claimValueValidator = v.object({
     ),
     placeId: v.optional(v.id("places")),
     description: v.optional(v.string()),
-    customFields: v.optional(v.any()),
+    customFields: customFieldsValidator,
 });
 
 /**

@@ -1,9 +1,10 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
 import { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
 import { MediaUploadModal } from '../media/MediaUploadModal';
 import { formatClaimDate } from '../../utils/claimDates';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 
 export function CreateSourceModal({
     treeId,
@@ -36,6 +37,7 @@ export function CreateSourceModal({
         api.media.listByPerson,
         mediaOwnerPersonId ? { personId: mediaOwnerPersonId as Id<"people"> } : "skip"
     ) as Array<Doc<"media"> & { storageUrl?: string | null }> | undefined;
+    const { handleErrorWithToast, showSuccess } = useErrorHandler();
 
     const claimOptions = useMemo(() => {
         if (!claims) return [];
@@ -77,10 +79,11 @@ export function CreateSourceModal({
                     mediaIds: selectedMediaIds
                 });
             }
+            showSuccess('Source created successfully');
             if (onSuccess) onSuccess(sourceId);
             onClose();
         } catch (error) {
-            console.error("Failed to create source:", error);
+            handleErrorWithToast(error, { operation: 'create source' });
         } finally {
             setIsSubmitting(false);
         }

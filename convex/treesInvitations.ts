@@ -1,9 +1,23 @@
 import { action, mutation, query, QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
+import type { FunctionReference } from "convex/server";
 import { requireTreeAdmin, requireUser } from "./lib/auth";
 import { insertAuditLog } from "./lib/auditLog";
 import type { Id } from "./_generated/dataModel";
+
+// Import internal without triggering deep type instantiation
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { internal } = require("./_generated/api") as {
+    internal: {
+        lib: {
+            treesInvitationsInternal: {
+                createInvitation: FunctionReference<"mutation", "internal">;
+                getInvitationForCancelInternal: FunctionReference<"query", "internal">;
+                deleteInvitation: FunctionReference<"mutation", "internal">;
+            };
+        };
+    };
+};
 
 const clerkInvitationEndpoint = "https://api.clerk.com/v1/invitations";
 
@@ -72,52 +86,6 @@ const revokeClerkInvitation = async (invitationId: string) => {
     }
 };
 
-export const ensureAdmin = mutation({
-    args: { treeId: v.id("trees") },
-    handler: async (ctx: MutationCtx, args) => {
-        const { userId } = await requireTreeAdmin(ctx, args.treeId);
-        return userId;
-    }
-});
-
-export const createInvitation = mutation({
-    args: {
-        treeId: v.id("trees"),
-        email: v.string(),
-        role: v.union(v.literal("admin"), v.literal("user")),
-        clerkInvitationId: v.optional(v.string())
-    },
-    handler: async (ctx: MutationCtx, args) => {
-        const { userId } = await requireTreeAdmin(ctx, args.treeId);
-        const now = Date.now();
-
-        const token = crypto.randomUUID();
-
-        const invitationId = await ctx.db.insert("invitations", {
-            treeId: args.treeId,
-            email: args.email.toLowerCase(),
-            role: args.role,
-            token,
-            clerkInvitationId: args.clerkInvitationId,
-            invitedBy: userId,
-            createdAt: now,
-            expiresAt: now + 7 * 24 * 60 * 60 * 1000
-        });
-
-        await insertAuditLog(ctx, {
-            treeId: args.treeId,
-            userId,
-            action: "invitation_sent",
-            entityType: "treeInvitation",
-            entityId: invitationId,
-            changes: { email: args.email, role: args.role },
-            timestamp: now,
-        });
-
-        return { invitationId, token };
-    }
-});
-
 export const invite = action({
     args: {
         treeId: v.id("trees"),
@@ -125,9 +93,8 @@ export const invite = action({
         role: v.union(v.literal("admin"), v.literal("user"))
     },
     handler: async (ctx: ActionCtx, args): Promise<{ invitationId: Id<"invitations">; token: string }> => {
-        await ctx.runMutation(api.treesInvitations.ensureAdmin, { treeId: args.treeId });
         const clerkInvitation = await createClerkInvitation(args.email, args.treeId, args.role);
-        return await ctx.runMutation(api.treesInvitations.createInvitation, {
+        return await ctx.runMutation(internal.lib.treesInvitationsInternal.createInvitation, {
             ...args,
             clerkInvitationId: clerkInvitation.id
         });
@@ -206,55 +173,13 @@ export const getInvitations = query({
     }
 });
 
-export const getInvitationForCancel = query({
-    args: {
-        treeId: v.id("trees"),
-        invitationId: v.id("invitations")
-    },
-    handler: async (ctx: QueryCtx, args) => {
-        await requireTreeAdmin(ctx, args.treeId);
-        const invitation = await ctx.db.get(args.invitationId);
-        if (!invitation || invitation.treeId !== args.treeId) {
-            throw new Error("Invitation not found");
-        }
-        return invitation;
-    }
-});
-
-export const deleteInvitation = mutation({
-    args: {
-        treeId: v.id("trees"),
-        invitationId: v.id("invitations")
-    },
-    handler: async (ctx: MutationCtx, args) => {
-        const { userId } = await requireTreeAdmin(ctx, args.treeId);
-
-        const invitation = await ctx.db.get(args.invitationId);
-        if (!invitation || invitation.treeId !== args.treeId) {
-            throw new Error("Invitation not found");
-        }
-
-        await ctx.db.delete(args.invitationId);
-
-        await insertAuditLog(ctx, {
-            treeId: args.treeId,
-            userId,
-            action: "invitation_cancelled",
-            entityType: "treeInvitation",
-            entityId: args.invitationId,
-        });
-
-        return args.treeId;
-    }
-});
-
 export const cancelInvitation = action({
     args: {
         treeId: v.id("trees"),
         invitationId: v.id("invitations")
     },
     handler: async (ctx: ActionCtx, args): Promise<Id<"trees">> => {
-        const invitation = await ctx.runQuery(api.treesInvitations.getInvitationForCancel, {
+        const invitation = await ctx.runQuery(internal.lib.treesInvitationsInternal.getInvitationForCancelInternal, {
             treeId: args.treeId,
             invitationId: args.invitationId
         });
@@ -263,7 +188,7 @@ export const cancelInvitation = action({
             await revokeClerkInvitation(invitation.clerkInvitationId);
         }
 
-        return await ctx.runMutation(api.treesInvitations.deleteInvitation, {
+        return await ctx.runMutation(internal.lib.treesInvitationsInternal.deleteInvitation, {
             treeId: args.treeId,
             invitationId: args.invitationId
         });

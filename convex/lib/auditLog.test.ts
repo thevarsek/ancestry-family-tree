@@ -1,11 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { insertAuditLog, type InsertAuditLogParams } from "./auditLog";
 import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 
-// Mock MutationCtx
+/**
+ * Mock context type for testing insertAuditLog.
+ * This is a minimal implementation that only includes
+ * the db.insert method that insertAuditLog actually uses.
+ */
+interface MockMutationCtx {
+    db: {
+        insert: ReturnType<typeof vi.fn>;
+    };
+    insertedDocs: Array<Record<string, unknown>>;
+}
+
+/**
+ * Creates a mock MutationCtx for testing.
+ * The mock is intentionally minimal - it only implements what insertAuditLog needs.
+ * We cast to MutationCtx to satisfy the function signature while keeping the mock simple.
+ */
 const createMockCtx = () => {
     const insertedDocs: Array<Record<string, unknown>> = [];
-    return {
+    const mock: MockMutationCtx = {
         db: {
             insert: vi.fn().mockImplementation((table: string, doc: Record<string, unknown>) => {
                 insertedDocs.push({ table, ...doc });
@@ -13,6 +30,12 @@ const createMockCtx = () => {
             }),
         },
         insertedDocs,
+    };
+    // Cast once here so we don't need eslint-disable at every call site
+    return {
+        ctx: mock as unknown as MutationCtx,
+        insertedDocs,
+        db: mock.db,
     };
 };
 
@@ -34,8 +57,7 @@ describe("insertAuditLog", () => {
             entityId: "person789",
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await insertAuditLog(mockCtx as any, params);
+        const result = await insertAuditLog(mockCtx.ctx, params);
 
         expect(result).toBe("auditLog123");
         expect(mockCtx.db.insert).toHaveBeenCalledWith("auditLog", {
@@ -60,8 +82,7 @@ describe("insertAuditLog", () => {
             timestamp: customTimestamp,
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await insertAuditLog(mockCtx as any, params);
+        await insertAuditLog(mockCtx.ctx, params);
 
         expect(mockCtx.db.insert).toHaveBeenCalledWith("auditLog", {
             treeId: "tree123",
@@ -88,8 +109,7 @@ describe("insertAuditLog", () => {
             changes,
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await insertAuditLog(mockCtx as any, params);
+        await insertAuditLog(mockCtx.ctx, params);
 
         expect(mockCtx.db.insert).toHaveBeenCalledWith("auditLog", {
             treeId: "tree123",
@@ -114,8 +134,7 @@ describe("insertAuditLog", () => {
                 entityId: "person789",
             };
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await insertAuditLog(mockCtx as any, params);
+            await insertAuditLog(mockCtx.ctx, params);
         }
 
         expect(mockCtx.db.insert).toHaveBeenCalledTimes(personActions.length);
@@ -146,8 +165,7 @@ describe("insertAuditLog", () => {
                 entityId: "claim123",
             };
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await insertAuditLog(mockCtx as any, params);
+            await insertAuditLog(mockCtx.ctx, params);
         }
 
         expect(mockCtx.db.insert).toHaveBeenCalledTimes(claimActions.length);
@@ -165,8 +183,7 @@ describe("insertAuditLog", () => {
                 entityId: "source123",
             };
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await insertAuditLog(mockCtx as any, params);
+            await insertAuditLog(mockCtx.ctx, params);
         }
 
         expect(mockCtx.db.insert).toHaveBeenCalledTimes(sourceActions.length);
@@ -190,8 +207,7 @@ describe("insertAuditLog", () => {
                 entityId: "entity123",
             };
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await insertAuditLog(mockCtx as any, params);
+            await insertAuditLog(mockCtx.ctx, params);
         }
 
         expect(mockCtx.db.insert).toHaveBeenCalledTimes(treeActions.length);
@@ -206,8 +222,7 @@ describe("insertAuditLog", () => {
             entityId: "media123",
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await insertAuditLog(mockCtx as any, params);
+        const result = await insertAuditLog(mockCtx.ctx, params);
 
         expect(result).toBe("auditLog123");
     });

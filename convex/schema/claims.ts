@@ -1,6 +1,17 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
+/**
+ * Validator for custom fields in claim values.
+ * Used for custom event titles and related person IDs.
+ */
+const customFieldsValidator = v.optional(
+    v.object({
+        title: v.optional(v.string()),
+        relatedPersonIds: v.optional(v.array(v.id("people"))),
+    })
+);
+
 export const claimTables = {
     claims: defineTable({
         treeId: v.id("trees"),
@@ -42,7 +53,7 @@ export const claimTables = {
             )),
             placeId: v.optional(v.id("places")),
             description: v.optional(v.string()),
-            customFields: v.optional(v.any())
+            customFields: customFieldsValidator
         }),
         status: v.union(
             v.literal("draft"),
@@ -69,7 +80,24 @@ export const claimTables = {
     claimDisputes: defineTable({
         claimId: v.id("claims"),
         treeId: v.id("trees"),
-        alternativeValue: v.any(),
+        // alternativeValue contains the same structure as claim value
+        alternativeValue: v.object({
+            date: v.optional(v.string()),
+            dateEnd: v.optional(v.string()),
+            isCurrent: v.optional(v.boolean()),
+            datePrecision: v.optional(v.union(
+                v.literal("exact"),
+                v.literal("year"),
+                v.literal("decade"),
+                v.literal("approximate"),
+                v.literal("before"),
+                v.literal("after"),
+                v.literal("between")
+            )),
+            placeId: v.optional(v.id("places")),
+            description: v.optional(v.string()),
+            customFields: customFieldsValidator
+        }),
         reason: v.string(),
         proposedBy: v.id("users"),
         proposedAt: v.number(),

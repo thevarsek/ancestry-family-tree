@@ -1,196 +1,38 @@
-import { mutation, query, action } from "./_generated/server";
-import { api } from "./_generated/api";
-import type { MutationCtx } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import { v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
-import { requireTreeAccess, requireTreeAdmin, requireUser } from "./lib/auth";
+import type { FunctionReference } from "convex/server";
+import { requireTreeAdmin, requireUser } from "./lib/auth";
 import { insertAuditLog } from "./lib/auditLog";
+import {
+    MAX_FILE_BYTES,
+    linkEntityValidator,
+    linkInputValidator,
+    ensureSupportedMime,
+    validateEntityLink,
+    persistDocumentExtraction,
+} from "./lib/mediaHelpers";
 
-const MAX_FILE_BYTES = 25 * 1024 * 1024;
+// Re-export queries for backward compatibility
+export { listByPerson, listByEntity, get, getUrls } from "./mediaQueries";
 
-const imageMimeTypes = new Set([
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif"
-]);
+// Import internal without triggering deep type instantiation
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const internalApi = require("./_generated/api") as {
+    internal: {
+        lib: {
+            mediaInternal: {
+                getMedia: FunctionReference<"query", "internal">;
+                updateDocumentProcessing: FunctionReference<"mutation", "internal">;
+                processDocument: FunctionReference<"action", "internal">;
+            };
+        };
+    };
+};
+const { internal } = internalApi;
 
-const documentMimeTypes = new Set([
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-]);
-
-const audioMimeTypes = new Set([
-    "audio/mpeg",
-    "audio/mp3",
-    "audio/mp4",
-    "audio/m4a",
-    "audio/wav",
-    "audio/x-wav",
-    "audio/ogg"
-]);
-
-type MediaType = "photo" | "document" | "audio" | "video";
-
-const linkEntityValidator = v.union(
-    v.literal("claim"),
-    v.literal("source"),
-    v.literal("place")
-);
-
-const linkInputValidator = v.object({
-    entityType: linkEntityValidator,
-    entityId: v.string()
-});
-
-function ensureSupportedMime(mimeType: string, mediaType: MediaType) {
-    if (mediaType === "photo" && !imageMimeTypes.has(mimeType)) {
-        throw new Error("Unsupported image type");
-    }
-    if (mediaType === "document" && !documentMimeTypes.has(mimeType)) {
-        throw new Error("Unsupported document type");
-    }
-    if (mediaType === "audio" && !audioMimeTypes.has(mimeType)) {
-        throw new Error("Unsupported audio type");
-    }
-}
-
-async function validateEntityLink(
-    ctx: { db: { get: (id: Id<"claims"> | Id<"sources"> | Id<"places">) => Promise<Doc<"claims"> | Doc<"sources"> | Doc<"places"> | null> } },
-    treeId: Id<"trees">,
-    link: { entityType: "claim" | "source" | "place"; entityId: string }
-) {
-    const entity = await ctx.db.get(link.entityId as Id<"claims"> | Id<"sources"> | Id<"places">);
-    if (!entity || entity.treeId !== treeId) {
-        throw new Error("Linked entity not found in tree");
-    }
-}
-
-function chunkText(text: string, chunkSize = 1000, overlap = 200) {
-    const chunks: string[] = [];
-    const safeOverlap = Math.min(overlap, chunkSize - 1);
-    let index = 0;
-    while (index < text.length) {
-        const end = Math.min(index + chunkSize, text.length);
-        chunks.push(text.slice(index, end));
-        index += chunkSize - safeOverlap;
-    }
-    return chunks.filter((chunk) => chunk.trim().length > 0);
-}
-
-export const processDocument = action({
-    args: {
-        mediaId: v.id("media"),
-        storageId: v.id("_storage"),
-        mimeType: v.string()
-    },
-    handler: async (ctx, args) => {
-        const media = await ctx.runQuery(api.media.get, { mediaId: args.mediaId });
-        if (!media) return;
-
-        try {
-            const fileUrl = await ctx.storage.getUrl(args.storageId);
-            if (!fileUrl) {
-                throw new Error("File not found in storage");
-            }
-
-            const response = await fetch(fileUrl);
-            if (!response.ok) {
-                throw new Error("Unable to download media file");
-            }
-
-            let text = "";
-            if (args.mimeType === "application/pdf") {
-                // For now, just mark as processed without actual OCR
-                // OCR processing would require external services
-                text = "PDF content extraction not implemented yet";
-            } else if (args.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-                // For now, just mark as processed without actual OCR
-                text = "Word document content extraction not implemented yet";
-            }
-
-            await ctx.runMutation(api.media.updateDocumentProcessing, {
-                mediaId: args.mediaId,
-                text,
-                status: "completed",
-                ocrMethod: "imported"
-            });
-        } catch (error) {
-            console.error("Failed to process document", error);
-            await ctx.runMutation(api.media.updateDocumentProcessing, {
-                mediaId: args.mediaId,
-                text: "",
-                status: "failed",
-                ocrMethod: "imported"
-            });
-        }
-    }
-});
-
-async function persistDocumentExtraction(
-    ctx: MutationCtx,
-    mediaId: Id<"media">,
-    text: string,
-    processingStatus: "completed" | "failed",
-    ocrMethod: "tesseract" | "browser_ocr" | "mistral_ocr" | "imported"
-) {
-    const media = await ctx.db.get(mediaId);
-    if (!media) return null;
-
-    await ctx.db.patch(mediaId, {
-        ocrStatus: processingStatus === "completed" ? "completed" : "failed",
-        ocrText: processingStatus === "completed" ? text : undefined
-    });
-
-    const now = Date.now();
-    const existingDoc = await ctx.db
-        .query("documents")
-        .withIndex("by_media", (q) => q.eq("mediaId", mediaId))
-        .unique();
-
-    const documentId = existingDoc
-        ? existingDoc._id
-        : await ctx.db.insert("documents", {
-            treeId: media.treeId,
-            mediaId,
-            title: media.title,
-            processingStatus,
-            ocrMethod,
-            createdAt: now
-        });
-
-    if (existingDoc) {
-        await ctx.db.patch(existingDoc._id, {
-            processingStatus,
-            ocrMethod
-        });
-    }
-
-    if (processingStatus === "failed" || !text.trim()) {
-        return documentId;
-    }
-
-    const chunks = chunkText(text);
-    for (let index = 0; index < chunks.length; index += 1) {
-        const chunkId = await ctx.db.insert("documentChunks", {
-            documentId,
-            treeId: media.treeId,
-            chunkIndex: index,
-            content: chunks[index],
-            createdAt: now
-        });
-
-        await ctx.db.insert("searchableContent", {
-            treeId: media.treeId,
-            entityType: "document_chunk",
-            entityId: chunkId,
-            content: chunks[index],
-            updatedAt: now
-        });
-    }
-
-    return documentId;
-}
+// ============================================================================
+// Mutations
+// ============================================================================
 
 export const generateUploadUrl = mutation({
     args: {},
@@ -355,8 +197,7 @@ export const create = mutation({
 
         if (args.type === "document" && args.storageKind === "convex_file" && args.storageId && args.mimeType) {
             await ctx.db.patch(mediaId, { ocrStatus: "processing" });
-            // Start document processing asynchronously
-            await ctx.scheduler.runAfter(0, api.media.processDocument, {
+            await ctx.scheduler.runAfter(0, internal.lib.mediaInternal.processDocument, {
                 mediaId,
                 storageId: args.storageId,
                 mimeType: args.mimeType
@@ -373,147 +214,6 @@ export const create = mutation({
         });
 
         return mediaId;
-    }
-});
-
-export const listByPerson = query({
-    args: { personId: v.id("people") },
-    handler: async (ctx, args) => {
-        const person = await ctx.db.get(args.personId);
-        if (!person) return [];
-
-        await requireTreeAccess(ctx, person.treeId);
-
-        const owned = await ctx.db
-            .query("media")
-            .withIndex("by_owner_person", (q) => q.eq("ownerPersonId", args.personId))
-            .collect();
-
-        const taggedLinks = await ctx.db
-            .query("mediaPeople")
-            .withIndex("by_person", (q) => q.eq("personId", args.personId))
-            .collect();
-
-        const taggedMedia = await Promise.all(
-            taggedLinks.map((link) => ctx.db.get(link.mediaId))
-        );
-
-        const mediaMap = new Map<string, Doc<"media">>();
-        owned.forEach((item) => mediaMap.set(item._id, item));
-        taggedMedia.filter(Boolean).forEach((item) => mediaMap.set(item!._id, item!));
-
-        const media = Array.from(mediaMap.values())
-            .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-
-        const tagLinks = await Promise.all(
-            media.map(async (item) => ({
-                mediaId: item._id,
-                tags: await ctx.db
-                    .query("mediaPeople")
-                    .withIndex("by_media", (q) => q.eq("mediaId", item._id))
-                    .collect()
-            }))
-        );
-
-        const tagMap = new Map(
-            tagLinks.map((entry) => [entry.mediaId, entry.tags.map((tag) => tag.personId)])
-        );
-
-        const linkInfo = await Promise.all(
-            media.map(async (item) => ({
-                mediaId: item._id,
-                links: await ctx.db
-                    .query("mediaLinks")
-                    .withIndex("by_media", (q) => q.eq("mediaId", item._id))
-                    .collect()
-            }))
-        );
-
-        const linkMap = new Map(
-            linkInfo.map((entry) => [
-                entry.mediaId,
-                entry.links.map((link) => ({
-                    entityType: link.entityType,
-                    entityId: link.entityId
-                }))
-            ])
-        );
-
-        return Promise.all(
-            media.map(async (item) => ({
-                ...item,
-                storageUrl: item.storageId ? await ctx.storage.getUrl(item.storageId) : undefined,
-                taggedPersonIds: tagMap.get(item._id) ?? [],
-                links: linkMap.get(item._id) ?? []
-            }))
-        );
-    }
-});
-
-export const listByEntity = query({
-    args: {
-        treeId: v.id("trees"),
-        entityType: linkEntityValidator,
-        entityId: v.string()
-    },
-    handler: async (ctx, args) => {
-        await requireTreeAccess(ctx, args.treeId);
-
-        const links = await ctx.db
-            .query("mediaLinks")
-            .withIndex("by_entity", (q) =>
-                q.eq("entityType", args.entityType).eq("entityId", args.entityId)
-            )
-            .collect();
-
-        const media = await Promise.all(links.map((link) => ctx.db.get(link.mediaId)));
-
-        return Promise.all(
-            media.filter(Boolean).map(async (item) => ({
-                ...item!,
-                storageUrl: item!.storageId ? await ctx.storage.getUrl(item!.storageId) : undefined
-            }))
-        );
-    }
-});
-
-export const get = query({
-    args: { mediaId: v.id("media") },
-    handler: async (ctx, args) => {
-        const media = await ctx.db.get(args.mediaId);
-        if (!media) return null;
-        await requireTreeAccess(ctx, media.treeId);
-
-        return {
-            ...media,
-            storageUrl: media.storageId ? await ctx.storage.getUrl(media.storageId) : undefined
-        };
-    }
-});
-
-export const getUrls = query({
-    args: { mediaIds: v.array(v.id("media")) },
-    handler: async (ctx, args) => {
-        if (args.mediaIds.length === 0) return [];
-
-        const mediaItems = await Promise.all(args.mediaIds.map((id) => ctx.db.get(id)));
-        const filtered = mediaItems.filter(Boolean) as Doc<"media">[];
-
-        if (filtered.length === 0) return [];
-
-        await requireTreeAccess(ctx, filtered[0].treeId);
-
-        return Promise.all(
-            filtered.map(async (item) => ({
-                mediaId: item._id,
-                storageUrl: item.storageId ? await ctx.storage.getUrl(item.storageId) : undefined,
-                zoomLevel: item.zoomLevel,
-                focusX: item.focusX,
-                focusY: item.focusY,
-                width: item.width,
-                height: item.height
-            }))
-        );
     }
 });
 

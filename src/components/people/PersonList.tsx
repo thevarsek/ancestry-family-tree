@@ -1,10 +1,11 @@
 import { useMemo, useState, type FormEvent, useEffect } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { Link } from 'react-router-dom';
-import { api } from '../../../convex/_generated/api';
 import { Doc, Id } from '../../../convex/_generated/dataModel';
+import { api } from '../../../convex/_generated/api';
 import { MediaUploadModal } from '../media/MediaUploadModal';
 import { ProfilePhoto } from './ProfilePhoto';
+import { handleError } from '../../utils/errorHandling';
 
 type PersonGender = 'unknown' | 'male' | 'female' | 'other';
 
@@ -66,7 +67,7 @@ export function PersonModal({
             if (onSuccess) onSuccess(resultId);
             onClose();
         } catch (error) {
-            console.error("Failed to save person:", error);
+            handleError(error, { operation: 'save person' });
         } finally {
             setIsSubmitting(false);
         }
@@ -177,13 +178,11 @@ export function PersonModal({
     );
 }
 
-export const CreatePersonModal = PersonModal; // Backwards compatibility for now
-
 export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
-    const people = useQuery(api.people.list, { treeId, limit: 100 });
+    const people = useQuery(api.people.list, { treeId, limit: 100 }) as Doc<"people">[] | undefined;
     const profilePhotoIds = useMemo(
         () => (people ?? [])
-            .map((person) => person.profilePhotoId)
+            .map((person: Doc<"people">) => person.profilePhotoId)
             .filter((id): id is Id<"media"> => Boolean(id)),
         [people]
     );
@@ -195,7 +194,7 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
     const [searchQuery, setSearchQuery] = useState('');
 
     // Client-side filtering for MVP (backend search exists for scale)
-    const filteredPeople = people?.filter(p => {
+    const filteredPeople = people?.filter((p: Doc<"people">) => {
         const fullName = `${p.givenNames || ''} ${p.surnames || ''}`.toLowerCase();
         return fullName.includes(searchQuery.toLowerCase());
     });
@@ -240,7 +239,7 @@ export function PersonList({ treeId }: { treeId: Id<"trees"> }) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredPeople?.map((person) => (
+                {filteredPeople?.map((person: Doc<"people">) => (
                     <Link
                         key={person._id}
                         to={`/tree/${treeId}/person/${person._id}`}

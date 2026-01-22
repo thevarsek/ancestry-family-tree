@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { usePanZoom } from '../../hooks/usePanZoom';
-import { exportSvgChart, type ChartExportFormat } from './chartExport';
+import { buildExportFileName, exportSvgChart, type ChartExportFormat } from './chartExport';
 import { renderParentLinks } from './pedigreeLinks';
 import { buildPedigreeLayout } from './pedigreeLayout';
 import type { PersonWithPhoto } from './pedigreeTypes';
@@ -16,11 +16,6 @@ interface PedigreeChartProps {
     isFullscreen?: boolean;
     onToggleFullscreen?: () => void;
 }
-
-const buildExportFileName = (value: string) => {
-    const sanitized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    return sanitized.length ? sanitized : 'family-tree';
-};
 
 export function PedigreeChart({
     treeId,

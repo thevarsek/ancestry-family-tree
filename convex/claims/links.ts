@@ -4,43 +4,6 @@ import { requireTreeAdmin } from "../lib/auth";
 import { insertAuditLog } from "../lib/auditLog";
 
 /**
- * Link a citation to a claim
- */
-export const addCitation = mutation({
-    args: {
-        claimId: v.id("claims"),
-        citationId: v.id("citations"),
-        isPrimary: v.optional(v.boolean()),
-    },
-    handler: async (ctx: MutationCtx, args) => {
-        const claim = await ctx.db.get(args.claimId);
-        if (!claim) throw new Error("Claim not found");
-
-        const { userId } = await requireTreeAdmin(ctx, claim.treeId);
-        const now = Date.now();
-
-        const linkId = await ctx.db.insert("claimCitations", {
-            claimId: args.claimId,
-            citationId: args.citationId,
-            treeId: claim.treeId,
-            isPrimary: args.isPrimary ?? false,
-            createdAt: now,
-        });
-
-        await insertAuditLog(ctx, {
-            treeId: claim.treeId,
-            userId,
-            action: "citation_linked",
-            entityType: "claimCitation",
-            entityId: linkId,
-            timestamp: now,
-        });
-
-        return linkId;
-    },
-});
-
-/**
  * Link a source to a claim
  */
 export const addSource = mutation({

@@ -2,6 +2,14 @@ import { jsPDF } from 'jspdf';
 
 export type ChartExportFormat = 'png' | 'pdf';
 
+/**
+ * Generate a sanitized filename for chart exports.
+ */
+export function buildExportFileName(value: string, fallback = 'chart'): string {
+    const sanitized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    return sanitized.length ? sanitized : fallback;
+}
+
 export interface ChartExportConfig {
     svg: SVGSVGElement;
     fileName: string;

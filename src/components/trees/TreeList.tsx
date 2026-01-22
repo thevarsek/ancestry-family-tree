@@ -1,14 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery, useMutation, useConvexAuth } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
 import { useUser } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../../../convex/_generated/api';
+import { useErrorHandler } from '../../hooks/useErrorHandler';
 
 export function CreateTreeModal({ onClose }: { onClose: () => void }) {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const createTree = useMutation(api.trees.create);
+    const { handleErrorWithToast, showSuccess } = useErrorHandler();
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
@@ -17,9 +19,10 @@ export function CreateTreeModal({ onClose }: { onClose: () => void }) {
         setIsSubmitting(true);
         try {
             await createTree({ name, description });
+            showSuccess('Tree created successfully!');
             onClose();
         } catch (error) {
-            console.error("Failed to create tree:", error);
+            handleErrorWithToast(error, { operation: 'create tree' });
         } finally {
             setIsSubmitting(false);
         }
