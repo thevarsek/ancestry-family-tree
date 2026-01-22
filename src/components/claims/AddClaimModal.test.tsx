@@ -94,7 +94,8 @@ describe('AddClaimModal', () => {
             />
         );
 
-        await user.click(screen.getByRole('checkbox', { name: /1900 census/i }));
+        await user.click(screen.getByRole('button', { name: /select sources/i }));
+        await user.click(screen.getByRole('button', { name: /1900 census/i }));
         await user.click(screen.getByRole('button', { name: /save fact/i }));
 
         await waitFor(() => {
@@ -122,11 +123,27 @@ describe('AddClaimModal', () => {
             />
         );
 
-        expect(screen.getByPlaceholderText('From (YYYY-MM-DD or YYYY)')).toBeInTheDocument();
+        expect(screen.getAllByPlaceholderText('From (YYYY-MM-DD or YYYY)').length).toBeGreaterThan(0);
         expect(screen.getByPlaceholderText('To (YYYY-MM-DD or YYYY)')).toBeInTheDocument();
 
         await user.click(screen.getByLabelText(/current/i));
 
         expect(screen.queryByPlaceholderText('To (YYYY-MM-DD or YYYY)')).not.toBeInTheDocument();
+    });
+
+    it('shows current date range controls for education claims', () => {
+        const onClose = vi.fn();
+
+        render(
+            <AddClaimModal
+                treeId={treeId}
+                subjectId={personId}
+                onClose={onClose}
+                defaultClaimType="education"
+            />
+        );
+
+        expect(screen.getAllByLabelText(/current/i).length).toBeGreaterThan(0);
+        expect(screen.getAllByPlaceholderText('From (YYYY-MM-DD or YYYY)').length).toBeGreaterThan(0);
     });
 });

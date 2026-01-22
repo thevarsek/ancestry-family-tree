@@ -1,25 +1,38 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
-import { buildPedigreeLayout, type LayoutLink, type LayoutNode } from './pedigreeLayout';
-
-interface PersonWithPhoto extends Doc<"people"> {
-    profilePhotoUrl?: string;
-    profilePhotoZoom?: number;
-    profilePhotoFocusX?: number;
-    profilePhotoFocusY?: number;
-}
+import { exportSvgChart, type ChartExportFormat } from './chartExport';
+import { renderParentLinks } from './pedigreeLinks';
+import { buildPedigreeLayout } from './pedigreeLayout';
+import type { PersonWithPhoto } from './pedigreeTypes';
 
 interface PedigreeChartProps {
     treeId: Id<"trees">;
     people: PersonWithPhoto[];
     relationships: Doc<"relationships">[];
     rootPersonId: Id<"people">;
+    height?: number | string;
+    isFullscreen?: boolean;
+    onToggleFullscreen?: () => void;
 }
 
-export function PedigreeChart({ treeId, people, relationships, rootPersonId }: PedigreeChartProps) {
+const buildExportFileName = (value: string) => {
+    const sanitized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    return sanitized.length ? sanitized : 'family-tree';
+};
+
+export function PedigreeChart({
+    treeId,
+    people,
+    relationships,
+    rootPersonId,
+    height = 600,
+    isFullscreen = false,
+    onToggleFullscreen,
+}: PedigreeChartProps) {
     const navigate = useNavigate();
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const svgRef = useRef<SVGSVGElement | null>(null);
     const [isPanning, setIsPanning] = useState(false);
     const [scale, setScale] = useState(1);
     const panState = useRef({
@@ -45,6 +58,8 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
         nodeHeight: NODE_HEIGHT,
         horizontalGap: HORIZONTAL_GAP
     }), [people, relationships, rootPersonId]);
+
+    const rootPerson = people.find((person) => person._id === rootPersonId);
 
     if (!chartData.nodes.length) {
         return <div className="p-8 text-center text-muted">No data available for this person.</div>;
@@ -148,11 +163,27 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
         container.scrollTop = targetY - container.clientHeight / 2;
     };
 
+    const handleExport = async (format: ChartExportFormat) => {
+        if (!svgRef.current) return;
+        const exportScale = Math.max(scale, 1);
+        const fileNameBase = rootPerson
+            ? `family-tree-${rootPerson.givenNames} ${rootPerson.surnames}`
+            : 'family-tree';
+        await exportSvgChart(format, {
+            svg: svgRef.current,
+            fileName: buildExportFileName(fileNameBase),
+            width: chartData.width,
+            height: chartData.height,
+            scale: exportScale,
+        });
+    };
+
     const spouseLinks = chartData.links.filter(link => link.type === 'spouse');
     const parentLinks = chartData.links.filter(link => link.type === 'parent');
+    const chartHeight = typeof height === 'number' ? `${height}px` : height;
 
     return (
-        <div className="card p-4 flex flex-col" style={{ height: '600px', overflow: 'hidden' }}>
+        <div className="card p-4 flex flex-col" style={{ height: chartHeight, overflow: 'hidden' }}>
             <div
                 className="flex items-center justify-between mb-3 text-xs text-muted"
                 onPointerDown={(event) => event.stopPropagation()}
@@ -160,6 +191,14 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
             >
                 <span>Drag to pan · Scrollbars for precise moves</span>
                 <div className="flex items-center gap-2">
+                    <button className="btn btn-ghost btn-sm" onClick={() => handleExport('png')}>Export PNG</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => handleExport('pdf')}>Export PDF</button>
+                    {onToggleFullscreen && (
+                        <button className="btn btn-secondary btn-sm" onClick={onToggleFullscreen}>
+                            {isFullscreen ? 'Exit full screen' : 'Full screen'}
+                        </button>
+                    )}
+                    <span className="text-muted">|</span>
                     <button className="btn btn-ghost btn-sm" onClick={handleZoomOut}>-</button>
                     <span style={{ minWidth: '3rem', textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
                     <button className="btn btn-ghost btn-sm" onClick={handleZoomIn}>+</button>
@@ -178,7 +217,12 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
                 onPointerCancel={handlePointerUp}
             >
                 <div style={{ width: chartData.width * scale, height: chartData.height * scale, display: 'inline-block', overflow: 'hidden' }}>
-                    <svg width={chartData.width} height={chartData.height} style={{ transform: `scale(${scale})`, transformOrigin: 'top left', overflow: 'hidden' }}>
+                    <svg
+                        ref={svgRef}
+                        width={chartData.width}
+                        height={chartData.height}
+                        style={{ transform: `scale(${scale})`, transformOrigin: 'top left', overflow: 'hidden' }}
+                    >
                         <defs>
                             <marker
                                 id="arrowhead"
@@ -329,85 +373,4 @@ export function PedigreeChart({ treeId, people, relationships, rootPersonId }: P
             </div>
         </div>
     );
-}
-
-function renderParentLinks({
-    parentLinks,
-    families,
-    familyByChild,
-    nodeById,
-    nodeWidth,
-    nodeHeight,
-    horizontalGap
-}: {
-    parentLinks: LayoutLink<PersonWithPhoto>[];
-    families: Map<string, { parents: Id<"people">[]; children: Id<"people">[] }>;
-    familyByChild: Map<Id<"people">, string>;
-    nodeById: Map<Id<"people">, LayoutNode<PersonWithPhoto>>;
-    nodeWidth: number;
-    nodeHeight: number;
-    horizontalGap: number;
-}) {
-    const familyLinks = new Map<string, LayoutLink<PersonWithPhoto>[]>();
-
-    parentLinks.forEach((link) => {
-        const familyId = familyByChild.get(link.to.id);
-        if (!familyId) return;
-        const links = familyLinks.get(familyId) ?? [];
-        links.push(link);
-        familyLinks.set(familyId, links);
-    });
-
-    return Array.from(familyLinks.entries()).map(([familyId, links]) => {
-        const fam = families.get(familyId);
-        if (!fam) return null;
-
-        const parentNodes = fam.parents
-            .map((pid) => nodeById.get(pid))
-            .filter((node): node is LayoutNode<PersonWithPhoto> => Boolean(node));
-
-        if (!parentNodes.length) return null;
-
-        const unionY = parentNodes.reduce((sum, parent) => sum + (parent.y + nodeHeight / 2), 0) / parentNodes.length;
-        const leftmostParent = parentNodes.reduce((left, parent) => (parent.x < left.x ? parent : left));
-        const gutterX = leftmostParent.x + nodeWidth + horizontalGap / 2;
-
-        return (
-            <g key={`family-${familyId}`}>
-                {parentNodes.map((parent, index) => {
-                    const fromX = parent.x + nodeWidth;
-                    const fromY = parent.y + nodeHeight / 2;
-                    const parentToUnion = `M ${fromX} ${fromY} L ${gutterX} ${fromY} L ${gutterX} ${unionY}`;
-                    const familyHighlight = links.some((link) => link.isHighlighted);
-
-                    return (
-                        <path
-                            key={`parent-${index}`}
-                            d={parentToUnion}
-                            stroke={familyHighlight ? 'var(--color-accent)' : 'var(--color-border)'}
-                            strokeWidth={familyHighlight ? 3 : 2}
-                            fill="none"
-                            opacity={familyHighlight ? 0.95 : 0.7}
-                        />
-                    );
-                })}
-                {links.map((link, index) => {
-                    const toX = link.to.x;
-                    const toY = link.to.y + nodeHeight / 2;
-                    const unionToChild = `M ${gutterX} ${unionY} L ${gutterX} ${toY} L ${toX} ${toY}`;
-
-                    return (
-                        <path
-                            key={`child-${index}`}
-                            d={unionToChild}
-                            stroke={link.isHighlighted ? 'var(--color-accent)' : 'var(--color-border)'}
-                            strokeWidth={link.isHighlighted ? 3 : 2}
-                            fill="none"
-                            opacity={link.isHighlighted ? 0.95 : 0.7}
-                        />
-                    );
-                })}
-            </g>
-        );
-    });
 }

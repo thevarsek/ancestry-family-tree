@@ -249,6 +249,14 @@ export function AddRelationshipModal({
                                 </div>
                             </div>
 
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => setShowCreatePerson(true)}
+                            >
+                                Create New Person
+                            </button>
+
                             <input
                                 className="input"
                                 placeholder="Search existing people..."
@@ -289,13 +297,9 @@ export function AddRelationshipModal({
                                 )}
                             </div>
 
-                            <button
-                                type="button"
-                                className="btn btn-secondary w-full"
-                                onClick={() => setShowCreatePerson(true)}
-                            >
-                                Create New Person
-                            </button>
+                            <p className="text-xs text-muted">
+                                Can&apos;t find someone? Create a new person and they&apos;ll be selected automatically.
+                            </p>
                         </div>
                     )}
                 </div>

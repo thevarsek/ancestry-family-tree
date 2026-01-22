@@ -2,8 +2,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { exportSvgChart } from './chartExport';
 import { PedigreeChart } from './PedigreeChart';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('./chartExport', () => ({
+    exportSvgChart: vi.fn(),
+}));
 
 const treeId = 'tree_1' as Id<"trees">;
 const userId = 'user_1' as Id<"users">;
@@ -43,6 +48,9 @@ const LocationDisplay = () => {
 };
 
 describe('PedigreeChart', () => {
+    afterEach(() => {
+        vi.clearAllMocks();
+    });
     it('renders only spouse and parent-child links', () => {
         const parent = createPerson('person_parent', 'Parent');
         const root = createPerson('person_root', 'Root');
@@ -155,5 +163,28 @@ describe('PedigreeChart', () => {
         await waitFor(() => {
             expect(screen.getByTestId('location')).toHaveTextContent(`/tree/${treeId}/person/${root._id}`);
         });
+    });
+
+    it('exports the chart in PNG and PDF formats', async () => {
+        const root = createPerson('person_root', 'Root');
+        const user = userEvent.setup();
+        vi.mocked(exportSvgChart).mockResolvedValue(undefined);
+
+        render(
+            <MemoryRouter>
+                <PedigreeChart
+                    treeId={treeId}
+                    people={[root]}
+                    relationships={[]}
+                    rootPersonId={root._id}
+                />
+            </MemoryRouter>
+        );
+
+        await user.click(screen.getAllByRole('button', { name: 'Export PNG' })[0]);
+        await user.click(screen.getAllByRole('button', { name: 'Export PDF' })[0]);
+
+        expect(exportSvgChart).toHaveBeenCalledWith('png', expect.any(Object));
+        expect(exportSvgChart).toHaveBeenCalledWith('pdf', expect.any(Object));
     });
 });

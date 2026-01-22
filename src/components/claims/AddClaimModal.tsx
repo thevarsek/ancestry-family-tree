@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { PlaceModal } from '../places/PlaceModal';
 import { MediaUploadModal } from '../media/MediaUploadModal';
+import { CreateSourceModal } from '../sources/CreateSourceModal';
+import { FilterableMultiSelect, FilterableSelect, type FilterableOption } from '../ui/FilterableSelect';
 
 type ClaimType =
     | "birth" | "death" | "marriage" | "divorce"
@@ -12,46 +14,6 @@ type ClaimType =
     | "naturalization" | "religion" | "name_change" | "custom";
 
 type MediaWithUrl = Doc<"media"> & { storageUrl?: string | null };
-
-function MediaItem({ media, isSelected, onToggle }: {
-    media: MediaWithUrl;
-    isSelected: boolean;
-    onToggle: () => void;
-}) {
-    const isImage = media.type === 'photo' && media.storageUrl;
-
-    return (
-        <label className="flex items-center gap-3 p-2 rounded hover:bg-surface-hover cursor-pointer">
-            <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={onToggle}
-                className="checkbox"
-            />
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-                {isImage ? (
-                    <img
-                        src={media.storageUrl ?? undefined}
-                        alt={media.title}
-                        className="w-12 h-12 object-cover rounded border"
-                        loading="lazy"
-                    />
-                ) : (
-                    <div className="w-12 h-12 bg-surface-muted rounded border flex items-center justify-center">
-                        <span className="text-xs text-muted capitalize">{media.type}</span>
-                    </div>
-                )}
-                <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">{media.title}</div>
-                    <div className="text-xs text-muted">
-                        {media.type} • {new Date(media.createdAt ?? 0).toLocaleDateString()}
-                        {media.description && ` • ${media.description.slice(0, 40)}${media.description.length > 40 ? '...' : ''}`}
-                    </div>
-                </div>
-            </div>
-        </label>
-    );
-}
 
 export function AddClaimModal({
     treeId,
@@ -83,6 +45,7 @@ export function AddClaimModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showPlaceModal, setShowPlaceModal] = useState(false);
     const [showMediaUpload, setShowMediaUpload] = useState(false);
+    const [showSourceModal, setShowSourceModal] = useState(false);
 
     const createClaim = useMutation(api.claims.create);
     const updateClaim = useMutation(api.claims.update);
@@ -101,7 +64,7 @@ export function AddClaimModal({
         initialClaim ? { treeId, entityType: "claim", entityId: initialClaim._id } : "skip"
     ) as MediaWithUrl[] | undefined;
 
-    const currentEligibleClaimTypes: ClaimType[] = ['residence', 'occupation'];
+    const currentEligibleClaimTypes: ClaimType[] = ['residence', 'occupation', 'education', 'military_service'];
     const isCurrentEligible = currentEligibleClaimTypes.includes(claimType);
 
     useEffect(() => {
@@ -266,11 +229,57 @@ export function AddClaimModal({
         { value: 'custom', label: 'Other Event' },
     ];
 
-    const taggableClaimTypes: ClaimType[] = ['marriage', 'divorce', 'custom'];
+    const singleTaggableClaimTypes: ClaimType[] = ['marriage'];
+    const multiTaggableClaimTypes: ClaimType[] = ['divorce', 'custom'];
+    const isSingleTaggable = singleTaggableClaimTypes.includes(claimType);
+    const isMultiTaggable = multiTaggableClaimTypes.includes(claimType);
     const availablePeople = (people ?? []).filter(
         (person) => person._id !== (subjectId as Id<"people">)
     );
     const canAttachMedia = subjectType === 'person';
+
+    const claimTypeOptions = useMemo<FilterableOption[]>(() => {
+        return claimTypes.map((type) => ({
+            id: type.value,
+            label: type.label,
+        }));
+    }, [claimTypes]);
+
+    const placeOptions = useMemo<FilterableOption[]>(() => {
+        return (places ?? []).map((place) => ({
+            id: place._id,
+            label: place.displayName,
+        }));
+    }, [places]);
+
+    const sourceOptions = useMemo<FilterableOption[]>(() => {
+        return (sources ?? []).map((source) => ({
+            id: source._id,
+            label: source.title,
+            description: source.author || source.url || undefined,
+        }));
+    }, [sources]);
+
+    const mediaOptions = useMemo<FilterableOption[]>(() => {
+        return (mediaList ?? []).map((item) => {
+            const dateLabel = new Date(item.createdAt ?? item._creationTime ?? 0).toLocaleDateString();
+            return {
+                id: item._id,
+                label: item.title,
+                description: `${item.type} • ${dateLabel}`,
+                thumbnailUrl: item.type === 'photo' ? item.storageUrl ?? undefined : undefined,
+                thumbnailLabel: item.type === 'photo' ? undefined : item.type,
+            };
+        });
+    }, [mediaList]);
+
+    const peopleOptions = useMemo<FilterableOption[]>(() => {
+        return availablePeople.map((person) => ({
+            id: person._id,
+            label: `${person.givenNames ?? ''} ${person.surnames ?? ''}`.trim(),
+            description: person.isLiving ? 'Living' : 'Deceased',
+        }));
+    }, [availablePeople]);
 
     return (
         <>
@@ -284,20 +293,19 @@ export function AddClaimModal({
                     <div className="modal-body space-y-4">
                         <div className="input-group">
                             <label className="input-label">Event Type</label>
-                            <select
-                                className="input"
+                            <FilterableSelect
+                                label="event type"
+                                placeholder="Select event type..."
+                                options={claimTypeOptions}
                                 value={claimType}
-                                onChange={(e) => {
-                                    setClaimType(e.target.value as ClaimType);
-                                    if (e.target.value !== 'custom') {
+                                onChange={(value) => {
+                                    if (!value) return;
+                                    setClaimType(value as ClaimType);
+                                    if (value !== 'custom') {
                                         setCustomTitle('');
                                     }
                                 }}
-                            >
-                                {claimTypes.map(t => (
-                                    <option key={t.value} value={t.value}>{t.label}</option>
-                                ))}
-                            </select>
+                            />
                         </div>
 
                         {claimType === 'custom' && (
@@ -313,31 +321,41 @@ export function AddClaimModal({
                             </div>
                         )}
 
-                        {taggableClaimTypes.includes(claimType) && (
+                        {(isSingleTaggable || isMultiTaggable) && (
                             <div className="input-group">
-                                <label className="input-label">Tag Other People</label>
-                                <p className="text-xs text-muted">They will see this event on their profile too.</p>
-                                <div className="border border-border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
-                                    {availablePeople.map((person) => (
-                                        <label key={person._id} className="flex items-center gap-2 text-sm">
-                                            <input
-                                                type="checkbox"
-                                                checked={taggedPeople.includes(person._id)}
-                                                onChange={(event) => {
-                                                    if (event.target.checked) {
-                                                        setTaggedPeople((prev) => [...prev, person._id]);
-                                                    } else {
-                                                        setTaggedPeople((prev) => prev.filter((id) => id !== person._id));
-                                                    }
-                                                }}
-                                            />
-                                            <span>{person.givenNames} {person.surnames}</span>
-                                        </label>
-                                    ))}
-                                    {availablePeople.length === 0 && (
-                                        <p className="text-xs text-muted">No other people in this tree yet.</p>
-                                    )}
-                                </div>
+                                <label className="input-label">
+                                    {claimType === 'marriage' ? 'Partner' : 'Tag Other People'}
+                                </label>
+                                <p className="text-xs text-muted">
+                                    {claimType === 'marriage'
+                                        ? 'Select the spouse or partner for this event.'
+                                        : 'They will see this event on their profile too.'}
+                                </p>
+                                {isSingleTaggable ? (
+                                    <FilterableSelect
+                                        label="people"
+                                        placeholder="Select a person..."
+                                        options={peopleOptions}
+                                        value={taggedPeople[0] ?? null}
+                                        onChange={(value) => {
+                                            if (value) {
+                                                setTaggedPeople([value as Id<"people">]);
+                                            } else {
+                                                setTaggedPeople([]);
+                                            }
+                                        }}
+                                        emptyLabel="No other people in this tree yet."
+                                    />
+                                ) : (
+                                    <FilterableMultiSelect
+                                        label="people"
+                                        placeholder="Select people..."
+                                        options={peopleOptions}
+                                        value={taggedPeople}
+                                        onChange={(value) => setTaggedPeople(value as Id<"people">[])}
+                                        emptyLabel="No other people in this tree yet."
+                                    />
+                                )}
                             </div>
                         )}
 
@@ -373,23 +391,23 @@ export function AddClaimModal({
                             </div>
                             <div className="input-group">
                                 <label className="input-label">Place</label>
-                                <select
-                                    className="input"
-                                    value={placeId}
-                                    onChange={(e) => setPlaceId(e.target.value as Id<"places">)}
-                                >
-                                    <option value="">Select a place...</option>
-                                    {places?.map(p => (
-                                        <option key={p._id} value={p._id}>{p.displayName}</option>
-                                    ))}
-                                </select>
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={() => setShowPlaceModal(true)}
-                                >
-                                    Add new place
-                                </button>
+                                <FilterableSelect
+                                    label="place"
+                                    placeholder="Select a place..."
+                                    options={placeOptions}
+                                    value={placeId || null}
+                                    onChange={(value) => setPlaceId((value as Id<"places">) ?? '')}
+                                    emptyLabel="No matching places."
+                                    footer={(
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary w-full"
+                                            onClick={() => setShowPlaceModal(true)}
+                                        >
+                                            Add new place
+                                        </button>
+                                    )}
+                                />
                             </div>
                         </div>
 
@@ -407,61 +425,46 @@ export function AddClaimModal({
                         <div className="input-group">
                             <label className="input-label">Sources</label>
                             <p className="text-xs text-muted">Optional. Link sources to this event.</p>
-                            <div className="border border-border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
-                                {sources?.map((source) => (
-                                    <label key={source._id} className="flex items-center gap-2 text-sm">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedSourceIds.includes(source._id)}
-                                            onChange={(event) => {
-                                                if (event.target.checked) {
-                                                    setSelectedSourceIds((prev) => [...prev, source._id]);
-                                                } else {
-                                                    setSelectedSourceIds((prev) =>
-                                                        prev.filter((id) => id !== source._id)
-                                                    );
-                                                }
-                                            }}
-                                        />
-                                        <span>{source.title}</span>
-                                    </label>
-                                ))}
-                                {(sources?.length ?? 0) === 0 && (
-                                    <p className="text-xs text-muted">No sources added yet.</p>
+                            <FilterableMultiSelect
+                                label="sources"
+                                placeholder="Select sources..."
+                                options={sourceOptions}
+                                value={selectedSourceIds}
+                                onChange={(value) => setSelectedSourceIds(value as Id<"sources">[])}
+                                emptyLabel="No sources added yet."
+                                footer={(
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary w-full"
+                                        onClick={() => setShowSourceModal(true)}
+                                    >
+                                        Add new source
+                                    </button>
                                 )}
-                            </div>
+                            />
                         </div>
 
                         {canAttachMedia && (
                             <div className="input-group">
                                 <label className="input-label">Media</label>
                                 <p className="text-xs text-muted">Optional. Attach media to this event.</p>
-                                <div className="border border-border rounded-md p-3 space-y-1 max-h-64 overflow-y-auto">
-                                    {(mediaList ?? []).map((item: MediaWithUrl) => (
-                                        <MediaItem
-                                            key={item._id}
-                                            media={item}
-                                            isSelected={selectedMediaIds.includes(item._id)}
-                                            onToggle={() => {
-                                                if (selectedMediaIds.includes(item._id)) {
-                                                    setSelectedMediaIds((prev) => prev.filter((id) => id !== item._id));
-                                                } else {
-                                                    setSelectedMediaIds((prev) => [...prev, item._id]);
-                                                }
-                                            }}
-                                        />
-                                    ))}
-                                    {(mediaList?.length ?? 0) === 0 && (
-                                        <p className="text-xs text-muted">No media added yet.</p>
+                                <FilterableMultiSelect
+                                    label="media"
+                                    placeholder="Select media..."
+                                    options={mediaOptions}
+                                    value={selectedMediaIds}
+                                    onChange={(value) => setSelectedMediaIds(value as Id<"media">[])}
+                                    emptyLabel="No media added yet."
+                                    footer={(
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary w-full"
+                                            onClick={() => setShowMediaUpload(true)}
+                                        >
+                                            Add new media
+                                        </button>
                                     )}
-                                </div>
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={() => setShowMediaUpload(true)}
-                                >
-                                    Add new media
-                                </button>
+                                />
                             </div>
                         )}
                     </div>
@@ -496,6 +499,17 @@ export function AddClaimModal({
                     onSuccess={(mediaId) => {
                         setSelectedMediaIds((prev) => [...prev, mediaId]);
                         setShowMediaUpload(false);
+                    }}
+                />
+            )}
+            {showSourceModal && (
+                <CreateSourceModal
+                    treeId={treeId}
+                    personId={subjectId as Id<"people">}
+                    onClose={() => setShowSourceModal(false)}
+                    onSuccess={(sourceId) => {
+                        setSelectedSourceIds((prev) => [...prev, sourceId]);
+                        setShowSourceModal(false);
                     }}
                 />
             )}
