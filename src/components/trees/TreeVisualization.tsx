@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { FanChart } from './FanChart';
 import { PedigreeChart } from './PedigreeChart';
-import { FilterableSelect, type FilterableOption } from '../ui/FilterableSelect';
+import { TimelineChart } from './TimelineChart';
+import { FilterableSelect, FilterableMultiSelect, type FilterableOption } from '../ui/FilterableSelect';
+import type { PersonWithDates, LifeEventClaim } from './timelineLayout';
 
 const chartOptions = [
     {
@@ -16,6 +18,11 @@ const chartOptions = [
         id: 'fan-chart',
         label: 'Radial Fan',
         description: 'Fan layout to reveal lineage patterns without overlap.'
+    },
+    {
+        id: 'timeline',
+        label: 'Timeline',
+        description: 'Chronological view of life events and people lifespans.'
     }
 ] as const;
 
@@ -23,9 +30,15 @@ type ChartOptionId = typeof chartOptions[number]['id'];
 
 export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
     const treeData = useQuery(api.people.getTreeData, { treeId });
+    const timelineData = useQuery(api.claims.getTimelineData, { treeId });
     const [rootPersonId, setRootPersonId] = useState<Id<"people"> | null>(null);
     const [activeChart, setActiveChart] = useState<ChartOptionId>('family-tree');
     const [isFullscreen, setIsFullscreen] = useState(false);
+
+    // Timeline filter state
+    const [timelineVisibleEventTypes, setTimelineVisibleEventTypes] = useState<string[]>([]);
+    const [timelineVisiblePersonIds, setTimelineVisiblePersonIds] = useState<string[]>([]);
+    const [timelineFocusedPersonId, setTimelineFocusedPersonId] = useState<Id<"people"> | null>(null);
 
     // Get profile photos for all people in the tree
     const profilePhotoIds = treeData?.people
@@ -46,6 +59,33 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
             setRootPersonId(someoneWithParents || treeData.people[0]._id);
         }
     }, [treeData, rootPersonId]);
+
+    // Initialize timeline filters when data loads
+    useEffect(() => {
+        if (timelineData) {
+            // Initialize with all event types visible
+            if (timelineVisibleEventTypes.length === 0 && timelineData.eventTypes.length > 0) {
+                setTimelineVisibleEventTypes(timelineData.eventTypes);
+            }
+            // Initialize with all people with birth dates visible
+            if (timelineVisiblePersonIds.length === 0 && timelineData.people.length > 0) {
+                const peopleWithBirthDates = timelineData.people
+                    .filter((p) => p.birthDate)
+                    .map((p) => p._id);
+                setTimelineVisiblePersonIds(peopleWithBirthDates);
+            }
+        }
+    }, [timelineData, timelineVisibleEventTypes.length, timelineVisiblePersonIds.length]);
+
+    // Convert filter arrays to Sets for TimelineChart
+    const visibleEventTypesSet = useMemo(
+        () => new Set(timelineVisibleEventTypes),
+        [timelineVisibleEventTypes]
+    );
+    const visiblePersonIdsSet = useMemo(
+        () => new Set(timelineVisiblePersonIds as Id<"people">[]),
+        [timelineVisiblePersonIds]
+    );
 
     if (treeData === undefined) {
         return (
@@ -73,7 +113,9 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
         ? `Viewing ancestry and descendants for ${currentPerson ? `${currentPerson.givenNames} ${currentPerson.surnames}` : 'selected person'}.`
         : activeChart === 'fan-chart'
             ? `Radial view focused on ${currentPerson ? `${currentPerson.givenNames} ${currentPerson.surnames}` : 'selected person'}.`
-            : chartConfig.description;
+            : activeChart === 'timeline'
+                ? 'View life events and people lifespans chronologically.'
+                : chartConfig.description;
 
     // Create profile photo map
     const profilePhotoMap = new Map(
@@ -103,6 +145,23 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
         id: person._id,
         label: `${person.givenNames} ${person.surnames}`,
     }));
+
+    // Timeline-specific filter options
+    const timelineEventTypeOptions: FilterableOption[] = (timelineData?.eventTypes ?? []).map((eventType) => ({
+        id: eventType,
+        label: eventType.charAt(0).toUpperCase() + eventType.slice(1).replace(/_/g, ' '),
+    }));
+    const timelinePersonOptions: FilterableOption[] = (timelineData?.people ?? []).map((person) => ({
+        id: person._id,
+        label: `${person.givenNames} ${person.surnames}`,
+        description: person.birthDate ? undefined : 'No birth date',
+    }));
+    const timelineFocusOptions: FilterableOption[] = (timelineData?.people ?? [])
+        .filter((p) => p.birthDate)
+        .map((person) => ({
+            id: person._id,
+            label: `${person.givenNames} ${person.surnames}`,
+        }));
 
     const renderChartControls = () => (
         <div className="card p-4 flex flex-col gap-4">
@@ -138,34 +197,45 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
                     )}
                 </div>
             </div>
+            {activeChart === 'timeline' && (
+                <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-border">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium whitespace-nowrap">Events:</span>
+                        <FilterableMultiSelect
+                            label="event types"
+                            options={timelineEventTypeOptions}
+                            value={timelineVisibleEventTypes}
+                            onChange={setTimelineVisibleEventTypes}
+                            placeholder="Select events"
+                            className="filterable-select-wide"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium whitespace-nowrap">People:</span>
+                        <FilterableMultiSelect
+                            label="people"
+                            options={timelinePersonOptions}
+                            value={timelineVisiblePersonIds}
+                            onChange={setTimelineVisiblePersonIds}
+                            placeholder="Select people"
+                            className="filterable-select-wide"
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium whitespace-nowrap">Focus on:</span>
+                        <FilterableSelect
+                            label="focus person"
+                            options={timelineFocusOptions}
+                            value={timelineFocusedPersonId}
+                            onChange={(value) => setTimelineFocusedPersonId(value as Id<"people"> | null)}
+                            placeholder="None"
+                            className="filterable-select-wide"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
-
-    const chartLegend = activeChart === 'family-tree' ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-muted px-2">
-            <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--color-accent)' }}></span>
-                <span>Selected Person</span>
-            </div>
-            <div className="flex items-center gap-2">
-                <span className="w-8 h-0.5 bg-border"></span>
-                <span>Direct Lineage</span>
-            </div>
-            <p className="md:text-right">Drag to pan, click a card to open profile</p>
-        </div>
-    ) : activeChart === 'fan-chart' ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-muted px-2">
-            <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full" style={{ background: 'linear-gradient(135deg, #ad8aff, #ff7c1e)' }}></span>
-                <span>Lineage palette by branch</span>
-            </div>
-            <div className="flex items-center gap-2">
-                <span className="w-8 h-0.5 bg-border"></span>
-                <span>Ancestor and descendant rings</span>
-            </div>
-            <p className="md:text-right">Zoom in for dense rings, click a name to open profile</p>
-        </div>
-    ) : null;
 
     const chartBody = rootPersonId && activeChart === 'family-tree' ? (
         <PedigreeChart
@@ -183,6 +253,17 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
             rootPersonId={rootPersonId}
             onToggleFullscreen={() => setIsFullscreen(true)}
         />
+    ) : activeChart === 'timeline' && timelineData ? (
+        <TimelineChart
+            treeId={treeId}
+            lifeEvents={timelineData.lifeEvents as LifeEventClaim[]}
+            people={timelineData.people as PersonWithDates[]}
+            relationships={timelineData.relationships}
+            visibleEventTypes={visibleEventTypesSet}
+            visiblePersonIds={visiblePersonIdsSet}
+            focusedPersonId={timelineFocusedPersonId}
+            onToggleFullscreen={() => setIsFullscreen(true)}
+        />
     ) : null;
 
     return (
@@ -190,7 +271,6 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
             <div className="space-y-6">
                 {renderChartControls()}
                 {chartBody}
-                {chartLegend}
             </div>
 
             {isFullscreen && (
@@ -235,8 +315,21 @@ export function TreeVisualization({ treeId }: { treeId: Id<"trees"> }) {
                                             onToggleFullscreen={() => setIsFullscreen(false)}
                                         />
                                     )}
+                                    {activeChart === 'timeline' && timelineData && (
+                                        <TimelineChart
+                                            treeId={treeId}
+                                            lifeEvents={timelineData.lifeEvents as LifeEventClaim[]}
+                                            people={timelineData.people as PersonWithDates[]}
+                                            relationships={timelineData.relationships}
+                                            visibleEventTypes={visibleEventTypesSet}
+                                            visiblePersonIds={visiblePersonIdsSet}
+                                            focusedPersonId={timelineFocusedPersonId}
+                                            height="100%"
+                                            isFullscreen
+                                            onToggleFullscreen={() => setIsFullscreen(false)}
+                                        />
+                                    )}
                                 </div>
-                                {chartLegend}
                             </div>
                         </div>
                     </div>

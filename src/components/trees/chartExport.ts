@@ -34,8 +34,10 @@ const chartCssVariables = [
     '--color-border',
     '--color-accent',
     '--color-accent-subtle',
+    '--color-secondary',
     '--color-text-primary',
-    '--color-text-muted'
+    '--color-text-muted',
+    '--color-text-inverse'
 ];
 
 const buildSvgMarkup = (svg: SVGSVGElement, width: number, height: number, fontFamily: string) => {
@@ -60,6 +62,11 @@ const buildSvgMarkup = (svg: SVGSVGElement, width: number, height: number, fontF
         .font-bold { font-weight: 700; }
         .text-sm { font-size: 12px; }
         .text-xs { font-size: 10px; }
+        .fan-chart-root {
+            stroke: rgba(255, 255, 255, 0.9);
+            stroke-width: 2;
+            filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.12));
+        }
     `;
     cloned.insertBefore(style, cloned.firstChild);
     return new XMLSerializer().serializeToString(cloned);
