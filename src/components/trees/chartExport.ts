@@ -55,6 +55,12 @@ const buildSvgMarkup = (svg: SVGSVGElement, width: number, height: number, fontF
         .filter(Boolean)
         .join(' ');
 
+    // Get computed font values
+    const fontSerif = getComputedStyle(document.documentElement).getPropertyValue('--font-serif').trim() || 
+        "'Merriweather', Georgia, 'Times New Roman', serif";
+    const fontSans = getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim() || 
+        "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
     const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
     style.textContent = `
         svg { ${variableStyles} }
@@ -62,10 +68,33 @@ const buildSvgMarkup = (svg: SVGSVGElement, width: number, height: number, fontF
         .font-bold { font-weight: 700; }
         .text-sm { font-size: 12px; }
         .text-xs { font-size: 10px; }
+        .fan-chart-svg {
+            font-family: ${fontSerif};
+        }
+        .fan-chart-label {
+            font-size: 0.78rem;
+            fill: var(--color-text-primary);
+        }
+        .fan-chart-label.is-dimmed {
+            opacity: 0.5;
+        }
+        .fan-chart-status {
+            font-size: 0.62rem;
+            fill: var(--color-text-muted);
+            font-family: ${fontSans};
+        }
         .fan-chart-root {
             stroke: rgba(255, 255, 255, 0.9);
             stroke-width: 2;
             filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.12));
+        }
+        .fan-chart-root-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            fill: var(--color-text-inverse);
+        }
+        .fan-chart-root-label .fan-chart-status {
+            fill: rgba(255, 255, 255, 0.78);
         }
     `;
     cloned.insertBefore(style, cloned.firstChild);
