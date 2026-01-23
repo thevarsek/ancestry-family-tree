@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Authenticated, Unauthenticated } from 'convex/react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { SignIn } from './components/auth/SignIn';
@@ -7,12 +8,27 @@ import { TreeSettings } from './pages/TreeSettings';
 import { PersonPage } from './pages/PersonPage';
 import { LifeEventPage } from './pages/LifeEventPage';
 import { SourcePage } from './pages/SourcePage';
+import { CommandPalette } from './components/ui/CommandPalette';
 import { ToastProvider } from './components/ui/Toast';
 import { UserButton } from "@clerk/clerk-react";
 import './App.css';
 
 function AppLayout() {
     const navigate = useNavigate();
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+    // Global keyboard shortcut for search
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                setIsSearchOpen(open => !open);
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     return (
         <div className="app">
@@ -25,7 +41,12 @@ function AppLayout() {
                         </div>
                         <nav className="header-nav">
                             <button className="btn btn-ghost" onClick={() => navigate('/')}>Trees</button>
-                            <button className="btn btn-ghost">Search</button>
+                            <button 
+                                className="btn btn-ghost" 
+                                onClick={() => setIsSearchOpen(true)}
+                            >
+                                Search
+                            </button>
                             <div className="ml-4">
                                 <UserButton afterSignOutUrl="/" />
                             </div>
@@ -54,6 +75,8 @@ function AppLayout() {
                     </p>
                 </div>
             </footer>
+
+            <CommandPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
         </div>
     );
 }

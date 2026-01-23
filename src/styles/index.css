@@ -12,6 +12,7 @@
 @import './components/spinner.css';
 @import './components/dropdown.css';
 @import './components/charts.css';
+@import './components/command-palette.css';
 @import './utilities/layout.css';
 @import './utilities/spacing.css';
 @import './utilities/typography.css';

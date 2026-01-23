@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from 'convex/react';
 import { Doc, Id } from '../../convex/_generated/dataModel';
 import { api } from '../../convex/_generated/api';
@@ -8,9 +8,40 @@ import { PlaceList } from '../components/places/PlaceList';
 import { TreeVisualization } from '../components/trees/TreeVisualization';
 import { SourceList } from '../components/sources/SourceList';
 
+type TabType = 'people' | 'chart' | 'places' | 'sources';
+
+const VALID_TABS: TabType[] = ['people', 'chart', 'places', 'sources'];
+
+function isValidTab(tab: string | null): tab is TabType {
+    return tab !== null && VALID_TABS.includes(tab as TabType);
+}
+
 export function TreePage() {
     const { treeId } = useParams<{ treeId: string }>();
-    const [activeTab, setActiveTab] = useState<'people' | 'chart' | 'places' | 'sources'>('people');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const tabParam = searchParams.get('tab');
+    const [activeTab, setActiveTab] = useState<TabType>(() => 
+        isValidTab(tabParam) ? tabParam : 'people'
+    );
+    
+    // Sync activeTab with URL param changes (e.g., when navigating from search)
+    useEffect(() => {
+        if (isValidTab(tabParam) && tabParam !== activeTab) {
+            setActiveTab(tabParam);
+        }
+    }, [tabParam, activeTab]);
+    
+    // Update URL when tab changes via click
+    const handleTabChange = (tab: TabType) => {
+        setActiveTab(tab);
+        if (tab === 'people') {
+            // Remove tab param for default tab
+            searchParams.delete('tab');
+        } else {
+            searchParams.set('tab', tab);
+        }
+        setSearchParams(searchParams, { replace: true });
+    };
 
     // Validate tree access
     const tree = useQuery(api.trees.get,
@@ -55,25 +86,25 @@ export function TreePage() {
             <div className="tabs mb-6">
                 <button
                     className={`tab ${activeTab === 'people' ? 'tab-active' : ''}`}
-                    onClick={() => setActiveTab('people')}
+                    onClick={() => handleTabChange('people')}
                 >
                     People
                 </button>
                 <button
                     className={`tab ${activeTab === 'chart' ? 'tab-active' : ''}`}
-                    onClick={() => setActiveTab('chart')}
+                    onClick={() => handleTabChange('chart')}
                 >
                     Chart
                 </button>
                 <button
                     className={`tab ${activeTab === 'places' ? 'tab-active' : ''}`}
-                    onClick={() => setActiveTab('places')}
+                    onClick={() => handleTabChange('places')}
                 >
                     Places
                 </button>
                 <button
                     className={`tab ${activeTab === 'sources' ? 'tab-active' : ''}`}
-                    onClick={() => setActiveTab('sources')}
+                    onClick={() => handleTabChange('sources')}
                 >
                     Sources
                 </button>
