@@ -59,6 +59,8 @@ export interface TimelineEventBar {
     personNames: string[];
     /** Number of merged events (1 if not merged) */
     mergedCount: number;
+    /** For merged events: all claim IDs involved (empty for synthetic birth/death events) */
+    claimIds: Id<"claims">[];
 }
 
 /** Complete timeline layout result */

@@ -126,7 +126,7 @@ export function PlaceList({ treeId }: { treeId: Id<"trees"> }) {
                                         <div
                                             key={claim._id}
                                             className={`border-b border-border-subtle pb-2 ${claim.person ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
-                                            onClick={claim.person ? () => navigate(`/tree/${treeId}/person/${claim.person!._id}`) : undefined}
+                                            onClick={claim.person ? () => navigate(`/tree/${treeId}/person/${claim.person!._id}/event/${claim._id}`) : undefined}
                                         >
                                             <div className="text-sm font-medium capitalize">
                                                 {claim.claimType === 'custom'

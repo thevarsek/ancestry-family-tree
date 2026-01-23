@@ -172,6 +172,7 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
             personIds: [claim.personId],
             personNames: [claim.personName],
             mergedCount: 1,
+            claimIds: [claim._id],
         });
     }
     
@@ -201,6 +202,7 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
                 personIds: [person._id],
                 personNames: [fullName],
                 mergedCount: 1,
+                claimIds: [], // Synthetic event - no real claim
             });
         }
         
@@ -223,6 +225,7 @@ export function buildTimelineLayout(input: TimelineLayoutInput): TimelineLayout 
                 personIds: [person._id],
                 personNames: [fullName],
                 mergedCount: 1,
+                claimIds: [], // Synthetic event - no real claim
             });
         }
     }
@@ -337,6 +340,7 @@ function mergeEvents(events: TimelineEventBar[]): TimelineEventBar[] {
             const first = groupEvents[0];
             const allPersonIds = groupEvents.map(e => e.personId);
             const allPersonNames = groupEvents.map(e => e.personName);
+            const allClaimIds = groupEvents.flatMap(e => e.claimIds);
             
             // Create a combined title (e.g., "Marriage - Ferdinando & Valeria")
             const combinedNames = allPersonNames.join(' & ');
@@ -357,6 +361,7 @@ function mergeEvents(events: TimelineEventBar[]): TimelineEventBar[] {
                 personIds: allPersonIds,
                 personNames: allPersonNames,
                 mergedCount: groupEvents.length,
+                claimIds: allClaimIds,
             });
         }
     }

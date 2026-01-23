@@ -108,7 +108,14 @@ export function TimelineChart({
                     break;
                 case 'Enter':
                     e.preventDefault();
-                    navigate(`/tree/${treeId}/person/${personMenu.personIds[menuSelectedIndex]}`);
+                    {
+                        const claimId = personMenu.claimIds[menuSelectedIndex];
+                        if (claimId) {
+                            navigate(`/tree/${treeId}/person/${personMenu.personIds[menuSelectedIndex]}/event/${claimId}`);
+                        } else {
+                            navigate(`/tree/${treeId}/person/${personMenu.personIds[menuSelectedIndex]}`);
+                        }
+                    }
                     setPersonMenu(null);
                     break;
             }
@@ -188,6 +195,15 @@ export function TimelineChart({
     };
 
     // Click handlers - no need to check wasRecentlyPanning since we removed drag-to-pan
+    const handleEventClick = (personId: Id<"people">, claimId: Id<"claims"> | null) => {
+        if (claimId) {
+            navigate(`/tree/${treeId}/person/${personId}/event/${claimId}`);
+        } else {
+            // Synthetic events (birth/death) navigate to person page
+            navigate(`/tree/${treeId}/person/${personId}`);
+        }
+    };
+
     const handlePersonClick = (personId: Id<"people">) => {
         navigate(`/tree/${treeId}/person/${personId}`);
     };
@@ -335,7 +351,7 @@ export function TimelineChart({
                                     maxYear={layout.maxYear}
                                     chartWidth={chartWidth}
                                     paddingX={PADDING_X}
-                                    onPersonClick={handlePersonClick}
+                                    onEventClick={handleEventClick}
                                     onShowPersonMenu={handleShowPersonMenu}
                                     onTooltipShow={handleTooltipShow}
                                     onTooltipHide={handleTooltipHide}
@@ -456,7 +472,12 @@ export function TimelineChart({
                                 transition: 'background-color 0.15s',
                             }}
                             onClick={() => {
-                                handlePersonClick(personId);
+                                const claimId = personMenu.claimIds[i];
+                                if (claimId) {
+                                    navigate(`/tree/${treeId}/person/${personId}/event/${claimId}`);
+                                } else {
+                                    navigate(`/tree/${treeId}/person/${personId}`);
+                                }
                                 setPersonMenu(null);
                             }}
                             onMouseEnter={() => setMenuSelectedIndex(i)}

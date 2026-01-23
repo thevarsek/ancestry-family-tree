@@ -19,6 +19,7 @@ export interface PersonSelectionMenu {
     y: number;
     personIds: Id<"people">[];
     personNames: string[];
+    claimIds: Id<"claims">[];
 }
 
 interface TimelineEventBarProps {
@@ -27,7 +28,7 @@ interface TimelineEventBarProps {
     maxYear: number;
     chartWidth: number;
     paddingX: number;
-    onPersonClick: (personId: Id<"people">) => void;
+    onEventClick: (personId: Id<"people">, claimId: Id<"claims"> | null) => void;
     onShowPersonMenu: (menu: PersonSelectionMenu) => void;
     onTooltipShow: (tooltip: TooltipState) => void;
     onTooltipHide: () => void;
@@ -42,7 +43,7 @@ export function TimelineEventBar({
     maxYear,
     chartWidth,
     paddingX,
-    onPersonClick,
+    onEventClick,
     onShowPersonMenu,
     onTooltipShow,
     onTooltipHide,
@@ -96,9 +97,12 @@ export function TimelineEventBar({
                 y: e.clientY,
                 personIds: eventBar.personIds,
                 personNames: eventBar.personNames,
+                claimIds: eventBar.claimIds,
             });
         } else {
-            onPersonClick(eventBar.personId);
+            // For non-merged events, pass the claimId (or null for synthetic birth/death events)
+            const claimId = eventBar.claimIds.length > 0 ? eventBar.claimIds[0] : null;
+            onEventClick(eventBar.personId, claimId);
         }
     };
 
