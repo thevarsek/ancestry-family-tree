@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMutation, useQuery } from 'convex/react';
@@ -41,15 +41,12 @@ const updateMediaLinks = vi.fn().mockResolvedValue(undefined);
 
 describe('SourceModal', () => {
     beforeEach(() => {
-        // Mock queries: claims returns claims, media returns empty array
-        vi.mocked(useQuery).mockImplementation((...args: unknown[]) => {
-            // Check query name to return appropriate data
-            const queryName = String(args[0]);
-            if (queryName.includes('claims')) {
-                return [claim];
-            }
-            // Media query returns empty array (no media items)
-            return [];
+        // Mock queries: alternate between claims and media queries
+        let queryCall = 0;
+        vi.mocked(useQuery).mockImplementation(() => {
+            const result = queryCall === 0 ? [claim] : [];
+            queryCall += 1;
+            return result;
         });
 
         // Mock mutations in order they're declared
@@ -69,6 +66,7 @@ describe('SourceModal', () => {
     });
 
     afterEach(() => {
+        cleanup();
         vi.clearAllMocks();
     });
 
@@ -103,14 +101,12 @@ describe('SourceModal', () => {
             </ToastProvider>
         );
 
-        // Fill in title
-        await user.type(
-            screen.getByPlaceholderText('e.g. 1920 US Census, Birth Certificate, etc.'),
-            'Birth Certificate'
-        );
+        // Fill in title - use getAllByPlaceholderText and take the first one
+        const titleInputs = screen.getAllByPlaceholderText('e.g. 1920 US Census, Birth Certificate, etc.');
+        await user.type(titleInputs[0], 'Birth Certificate');
 
-        // Click Save & Close
-        await user.click(screen.getByRole('button', { name: /save & close/i }));
+        // Click Create Source button
+        await user.click(screen.getByRole('button', { name: /create source/i }));
 
         await waitFor(() => {
             expect(createSource).toHaveBeenCalledWith({

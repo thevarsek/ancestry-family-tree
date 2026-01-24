@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMutation, useQuery } from 'convex/react';
 import type { Doc, Id } from '../../convex/_generated/dataModel';
 import { SourcePage } from './SourcePage';
+import { ToastProvider } from '../components/ui/Toast';
 
 vi.mock('convex/react', () => ({
     useQuery: vi.fn(),
@@ -99,14 +100,16 @@ describe('SourcePage', () => {
 
     it('renders source details with linked events', () => {
         render(
-            <MemoryRouter initialEntries={[`/tree/${treeId}/person/${personId}/source/${sourceId}`]}>
-                <Routes>
-                    <Route
-                        path="/tree/:treeId/person/:personId/source/:sourceId"
-                        element={<SourcePage />}
-                    />
-                </Routes>
-            </MemoryRouter>
+            <ToastProvider>
+                <MemoryRouter initialEntries={[`/tree/${treeId}/person/${personId}/source/${sourceId}`]}>
+                    <Routes>
+                        <Route
+                            path="/tree/:treeId/person/:personId/source/:sourceId"
+                            element={<SourcePage />}
+                        />
+                    </Routes>
+                </MemoryRouter>
+            </ToastProvider>
         );
 
         expect(screen.getByRole('heading', { name: /marriage certificate/i })).toBeInTheDocument();

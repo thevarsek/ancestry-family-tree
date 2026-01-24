@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { useMutation, useQuery } from 'convex/react';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
@@ -38,6 +38,7 @@ describe('RelationshipModal', () => {
     });
 
     afterEach(() => {
+        cleanup();
         vi.clearAllMocks();
     });
 
@@ -53,7 +54,7 @@ describe('RelationshipModal', () => {
             </ToastProvider>
         );
 
-        expect(screen.getByText('Add Relationship')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Add Relationship' })).toBeInTheDocument();
         expect(screen.getByText('Relationship Type')).toBeInTheDocument();
         expect(screen.getByText('Select People')).toBeInTheDocument();
     });
@@ -70,12 +71,13 @@ describe('RelationshipModal', () => {
             </ToastProvider>
         );
 
-        expect(screen.getByText('Parent')).toBeInTheDocument();
-        expect(screen.getByText('Child')).toBeInTheDocument();
-        expect(screen.getByText('Spouse')).toBeInTheDocument();
-        expect(screen.getByText('Sibling')).toBeInTheDocument();
-        expect(screen.getByText('Partner')).toBeInTheDocument();
-        expect(screen.getByText('Half Sibling')).toBeInTheDocument();
+        // Use getAllByText since relationship types appear as both button labels and step content
+        expect(screen.getAllByText('Parent').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Child').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Spouse').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Sibling').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Partner').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Half Sibling').length).toBeGreaterThan(0);
     });
 
     it('displays the person name in context', () => {
@@ -90,6 +92,7 @@ describe('RelationshipModal', () => {
             </ToastProvider>
         );
 
-        expect(screen.getByText(/John Doe/)).toBeInTheDocument();
+        // Use getAllByText since the name appears multiple times in the modal
+        expect(screen.getAllByText(/John Doe/).length).toBeGreaterThan(0);
     });
 });
