@@ -3,17 +3,14 @@ import { useQuery } from 'convex/react';
 import { useNavigate } from 'react-router-dom';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { api } from '../../../convex/_generated/api';
-import { CreateSourceModal } from './CreateSourceModal';
-import type { PersonClaim } from '../../types/claims';
+import { SourceModal } from './SourceModal';
 
 export function PersonSourceList({
     treeId,
     personId,
-    claims,
 }: {
     treeId: Id<"trees">;
     personId: Id<"people">;
-    claims: PersonClaim[];
 }) {
     const sources = useQuery(api.sources.listByPerson, { personId }) as Doc<"sources">[] | undefined;
     const [showCreate, setShowCreate] = useState(false);
@@ -97,10 +94,8 @@ export function PersonSourceList({
             </div>
 
             {showCreate && (
-                <CreateSourceModal
+                <SourceModal
                     treeId={treeId}
-                    claims={claims}
-                    personId={personId}
                     onClose={() => setShowCreate(false)}
                 />
             )}

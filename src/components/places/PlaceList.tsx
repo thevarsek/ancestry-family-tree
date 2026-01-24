@@ -5,7 +5,7 @@ import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { api } from '../../../convex/_generated/api';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { PlaceModal } from './PlaceModal';
+import { PlaceModal } from './PlaceModalSimple';
 import { defaultLeafletIcon } from './leafletIcon';
 import { formatClaimDate } from '../../utils/claimDates';
 

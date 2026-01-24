@@ -1,4 +1,105 @@
 /* ─── Modal ─── */
+
+/* ─── Wizard Modal ─── */
+.wizard-modal {
+    max-width: 600px;
+}
+
+.wizard-steps {
+    display: flex;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-6);
+    border-bottom: 1px solid var(--color-border-subtle);
+    background-color: var(--color-surface-muted);
+    overflow-x: auto;
+}
+
+.wizard-step {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    color: var(--color-text-muted);
+}
+
+.wizard-step:hover:not(:disabled) {
+    background-color: var(--color-surface-hover);
+}
+
+.wizard-step:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.wizard-step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: var(--color-border);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--font-semibold);
+    flex-shrink: 0;
+}
+
+.wizard-step-label {
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+}
+
+.wizard-step-active {
+    color: var(--color-accent);
+}
+
+.wizard-step-active .wizard-step-number {
+    background-color: var(--color-accent);
+    color: white;
+}
+
+.wizard-step-completed .wizard-step-number {
+    background-color: var(--color-success);
+    color: white;
+}
+
+.wizard-step-completed .wizard-step-number::after {
+    content: "✓";
+    font-size: 12px;
+}
+
+.wizard-step-completed .wizard-step-number {
+    font-size: 0; /* Hide number, show checkmark */
+}
+
+.wizard-footer {
+    display: flex;
+    align-items: center;
+}
+
+/* Mobile responsive wizard steps */
+@media (max-width: 640px) {
+    .wizard-steps {
+        padding: var(--space-2) var(--space-4);
+    }
+    
+    .wizard-step-label {
+        display: none;
+    }
+    
+    .wizard-step {
+        padding: var(--space-2);
+    }
+}
+
+/* ─── Base Modal ─── */
 .modal-backdrop {
     position: fixed;
     inset: 0;

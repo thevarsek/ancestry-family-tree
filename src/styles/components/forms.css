@@ -134,6 +134,11 @@
     box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
 }
 
+/* Portal-based panel needs higher z-index to appear above modals */
+.filterable-select-panel-portal {
+    z-index: 10000;
+}
+
 .filterable-select-search {
     margin-bottom: var(--space-2);
 }

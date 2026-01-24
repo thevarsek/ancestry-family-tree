@@ -38,6 +38,8 @@ export type AuditAction =
     | "media_uploaded"
     | "media_updated"
     | "media_deleted"
+    | "media_linked"
+    | "media_unlinked"
     // Place actions
     | "place_created"
     | "place_updated"
@@ -72,6 +74,7 @@ export type AuditEntityType =
     | "source"
     | "sourceClaim"
     | "media"
+    | "mediaLink"
     | "place"
     | "relationship"
     | "tree"

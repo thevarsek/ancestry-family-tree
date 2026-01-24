@@ -3,7 +3,7 @@ import { useQuery } from 'convex/react';
 import { useNavigate } from 'react-router-dom';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { api } from '../../../convex/_generated/api';
-import { CreateSourceModal } from './CreateSourceModal';
+import { SourceModal } from './SourceModal';
 
 export function SourceList({ treeId }: { treeId: Id<"trees"> }) {
     const sources = useQuery(api.sources.list, { treeId, limit: 100 }) as Doc<"sources">[] | undefined;
@@ -87,7 +87,7 @@ export function SourceList({ treeId }: { treeId: Id<"trees"> }) {
             </div>
 
             {showCreate && (
-                <CreateSourceModal
+                <SourceModal
                     treeId={treeId}
                     onClose={() => setShowCreate(false)}
                 />

@@ -37,6 +37,10 @@ const emptyForm: PlaceFormState = {
     longitude: '',
 };
 
+/**
+ * Simple (non-wizard) modal for creating and editing places.
+ * Used for quick inline place creation from other modals.
+ */
 export function PlaceModal({
     treeId,
     initialPlace,

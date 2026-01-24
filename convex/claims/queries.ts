@@ -5,6 +5,45 @@ import { Id } from "../_generated/dataModel";
 import { subjectTypeValidator } from "./validators";
 
 /**
+ * List all claims in a tree (for linking sources to events)
+ */
+export const listByTree = query({
+    args: {
+        treeId: v.id("trees"),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx: QueryCtx, args) => {
+        await requireTreeAccess(ctx, args.treeId);
+
+        const claims = await ctx.db
+            .query("claims")
+            .withIndex("by_tree", (q) => q.eq("treeId", args.treeId))
+            .take(args.limit ?? 500);
+
+        // Enrich with person/relationship names for display
+        const enrichedClaims = await Promise.all(
+            claims.map(async (claim) => {
+                let personName: string | null = null;
+                
+                if (claim.subjectType === "person") {
+                    const person = await ctx.db.get(claim.subjectId as Id<"people">);
+                    if (person) {
+                        personName = [person.givenNames, person.surnames].filter(Boolean).join(" ") || "Unknown";
+                    }
+                }
+
+                return {
+                    ...claim,
+                    personName,
+                };
+            })
+        );
+
+        return enrichedClaims;
+    },
+});
+
+/**
  * List claims for a subject (person/relationship/event)
  */
 export const listBySubject = query({

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 export type FilterableOption = {
     id: string;
@@ -27,25 +28,67 @@ type FilterableMultiSelectProps = BaseSelectProps & {
     onChange: (value: string[]) => void;
 };
 
-function useOutsideClose(isOpen: boolean, onClose: () => void) {
-    const containerRef = useRef<HTMLDivElement | null>(null);
-
+function useOutsideClose(
+    isOpen: boolean,
+    onClose: () => void,
+    triggerRef: React.RefObject<HTMLElement | null>,
+    panelRef: React.RefObject<HTMLElement | null>
+) {
     useEffect(() => {
         if (!isOpen) return;
 
         const handlePointerDown = (event: PointerEvent) => {
             const target = event.target as Node | null;
             if (!target) return;
-            if (!containerRef.current?.contains(target)) {
+            // Close if click is outside both trigger and panel
+            const clickedOutsideTrigger = !triggerRef.current?.contains(target);
+            const clickedOutsidePanel = !panelRef.current?.contains(target);
+            if (clickedOutsideTrigger && clickedOutsidePanel) {
                 onClose();
             }
         };
 
         document.addEventListener('pointerdown', handlePointerDown);
         return () => document.removeEventListener('pointerdown', handlePointerDown);
-    }, [isOpen, onClose]);
+    }, [isOpen, onClose, triggerRef, panelRef]);
+}
 
-    return containerRef;
+function useDropdownPosition(
+    triggerRef: React.RefObject<HTMLElement | null>,
+    isOpen: boolean
+) {
+    const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+
+    // Use useLayoutEffect to calculate position synchronously before paint
+    // This prevents the flash at (0,0) before repositioning
+    useLayoutEffect(() => {
+        if (!isOpen || !triggerRef.current) {
+            setPosition(null);
+            return;
+        }
+
+        const updatePosition = () => {
+            const rect = triggerRef.current?.getBoundingClientRect();
+            if (rect) {
+                setPosition({
+                    top: rect.bottom + window.scrollY + 8, // 8px gap
+                    left: rect.left + window.scrollX,
+                    width: rect.width,
+                });
+            }
+        };
+
+        updatePosition();
+        window.addEventListener('scroll', updatePosition, true);
+        window.addEventListener('resize', updatePosition);
+
+        return () => {
+            window.removeEventListener('scroll', updatePosition, true);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [isOpen, triggerRef]);
+
+    return position;
 }
 
 function useFilteredOptions(options: FilterableOption[], query: string) {
@@ -116,14 +159,18 @@ export function FilterableSelect({
 }: FilterableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
-    const containerRef = useOutsideClose(isOpen, () => setIsOpen(false));
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+    useOutsideClose(isOpen, () => setIsOpen(false), triggerRef, panelRef);
+    const position = useDropdownPosition(triggerRef, isOpen);
     const filteredOptions = useFilteredOptions(options, query);
     const selectedOption = options.find((option) => option.id === value) ?? null;
     const buttonLabel = selectedOption?.label ?? placeholder ?? 'Select...';
 
     return (
-        <div ref={containerRef} className={`filterable-select ${className ?? ''}`}>
+        <div className={`filterable-select ${className ?? ''}`}>
             <button
+                ref={triggerRef}
                 type="button"
                 className="input filterable-select-trigger"
                 aria-label={label ? `Select ${label}` : 'Select option'}
@@ -132,8 +179,18 @@ export function FilterableSelect({
                 <span className={selectedOption ? '' : 'text-muted'}>{buttonLabel}</span>
                 <span className="filterable-select-caret">v</span>
             </button>
-            {isOpen && (
-                <div className="filterable-select-panel">
+            {isOpen && position && createPortal(
+                <div
+                    ref={panelRef}
+                    className="filterable-select-panel filterable-select-panel-portal"
+                    style={{
+                        position: 'absolute',
+                        top: position.top,
+                        left: position.left,
+                        width: position.width,
+                        minWidth: '260px',
+                    }}
+                >
                     <input
                         className="input filterable-select-search"
                         placeholder={label ? `Search ${label.toLowerCase()}...` : 'Search...'}
@@ -160,7 +217,8 @@ export function FilterableSelect({
                         )}
                     </div>
                     {footer && <div className="filterable-select-footer">{footer}</div>}
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
@@ -178,7 +236,10 @@ export function FilterableMultiSelect({
 }: FilterableMultiSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
-    const containerRef = useOutsideClose(isOpen, () => setIsOpen(false));
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+    useOutsideClose(isOpen, () => setIsOpen(false), triggerRef, panelRef);
+    const position = useDropdownPosition(triggerRef, isOpen);
     const filteredOptions = useFilteredOptions(options, query);
     const selectedLabels = options
         .filter((option) => value.includes(option.id))
@@ -190,8 +251,9 @@ export function FilterableMultiSelect({
             : `${selectedLabels.length} selected`;
 
     return (
-        <div ref={containerRef} className={`filterable-select ${className ?? ''}`}>
+        <div className={`filterable-select ${className ?? ''}`}>
             <button
+                ref={triggerRef}
                 type="button"
                 className="input filterable-select-trigger"
                 aria-label={label ? `Select ${label}` : 'Select options'}
@@ -200,8 +262,18 @@ export function FilterableMultiSelect({
                 <span className={selectedLabels.length ? '' : 'text-muted'}>{selectedSummary}</span>
                 <span className="filterable-select-caret">v</span>
             </button>
-            {isOpen && (
-                <div className="filterable-select-panel">
+            {isOpen && position && createPortal(
+                <div
+                    ref={panelRef}
+                    className="filterable-select-panel filterable-select-panel-portal"
+                    style={{
+                        position: 'absolute',
+                        top: position.top,
+                        left: position.left,
+                        width: position.width,
+                        minWidth: '260px',
+                    }}
+                >
                     <input
                         className="input filterable-select-search"
                         placeholder={label ? `Search ${label.toLowerCase()}...` : 'Search...'}
@@ -230,7 +302,8 @@ export function FilterableMultiSelect({
                         )}
                     </div>
                     {footer && <div className="filterable-select-footer">{footer}</div>}
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

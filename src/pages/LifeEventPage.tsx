@@ -5,13 +5,17 @@ import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Doc, Id } from '../../convex/_generated/dataModel';
 import { api } from '../../convex/_generated/api';
-import { AddClaimModal } from '../components/claims/AddClaimModal';
+import { LifeEventModal } from '../components/claims/LifeEventModal';
 import { MediaCard } from '../components/media/MediaCard';
+import { SourceModal } from '../components/sources/SourceModal';
+import { LinkSourceModal } from '../components/sources/LinkSourceModal';
+import { MediaUploadModal } from '../components/media/MediaUploadModal';
+import { LinkMediaModal } from '../components/media/LinkMediaModal';
 import { defaultLeafletIcon } from '../components/places/leafletIcon';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { formatClaimDate } from '../utils/claimDates';
 import { getClaimTitle, sortClaimsForTimeline } from '../utils/claimSorting';
-import { handleError } from '../utils/errorHandling';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 
 type ClaimWithDetails = Doc<"claims"> & {
     place?: Doc<"places"> | null;
@@ -28,13 +32,26 @@ export function LifeEventPage() {
         claimId: string;
     }>();
     const navigate = useNavigate();
+    const { handleErrorWithToast, showSuccess } = useErrorHandler();
+
+    // Modal state
     const [showEdit, setShowEdit] = useState(false);
+    const [showSourceModal, setShowSourceModal] = useState(false);
+    const [showLinkSourceModal, setShowLinkSourceModal] = useState(false);
+    const [showMediaUpload, setShowMediaUpload] = useState(false);
+    const [showLinkMediaModal, setShowLinkMediaModal] = useState(false);
     const [pendingDelete, setPendingDelete] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
+    // Mutations
     const removeClaim = useMutation(api.claims.remove);
+    const addSourceToClaim = useMutation(api.claims.links.addSource);
+    const removeSourceFromClaim = useMutation(api.claims.links.removeSource);
+    const linkMedia = useMutation(api.media.linkToEntity);
+    const unlinkMedia = useMutation(api.media.unlinkFromEntity);
 
+    // Queries
     const person = useQuery(
         api.people.getWithClaims,
         personId ? { personId: personId as Id<"people"> } : 'skip'
@@ -83,6 +100,61 @@ export function LifeEventPage() {
         if (!place?.latitude || !place?.longitude) return [20, 0];
         return [place.latitude, place.longitude];
     }, [place]);
+
+    // Handlers for linking/unlinking
+    const handleLinkSource = async (sourceId: Id<"sources">) => {
+        if (!claimId) return;
+        try {
+            await addSourceToClaim({
+                claimId: claimId as Id<"claims">,
+                sourceId,
+            });
+            showSuccess('Source linked');
+        } catch (err) {
+            handleErrorWithToast(err, { operation: 'link source' });
+        }
+    };
+
+    const handleUnlinkSource = async (sourceId: string) => {
+        if (!claimId) return;
+        try {
+            await removeSourceFromClaim({
+                claimId: claimId as Id<"claims">,
+                sourceId: sourceId as Id<"sources">,
+            });
+            showSuccess('Source unlinked');
+        } catch (err) {
+            handleErrorWithToast(err, { operation: 'unlink source' });
+        }
+    };
+
+    const handleLinkMedia = async (mediaId: Id<"media">) => {
+        if (!claimId) return;
+        try {
+            await linkMedia({
+                mediaId,
+                entityType: 'claim',
+                entityId: claimId,
+            });
+            showSuccess('Media linked');
+        } catch (err) {
+            handleErrorWithToast(err, { operation: 'link media' });
+        }
+    };
+
+    const handleUnlinkMedia = async (mediaId: string) => {
+        if (!claimId) return;
+        try {
+            await unlinkMedia({
+                mediaId: mediaId as Id<"media">,
+                entityType: 'claim',
+                entityId: claimId,
+            });
+            showSuccess('Media unlinked');
+        } catch (err) {
+            handleErrorWithToast(err, { operation: 'unlink media' });
+        }
+    };
 
     if (person === undefined || claim === undefined) {
         return <div className="spinner spinner-lg mx-auto mt-12" />;
@@ -191,27 +263,45 @@ export function LifeEventPage() {
 
                     <section className="card p-6 space-y-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold">Sources</h2>
-                            <span className="text-xs text-muted">{sources.length} linked</span>
+                            <div>
+                                <h2 className="text-lg font-semibold">Sources</h2>
+                                <span className="text-xs text-muted">{sources.length} linked</span>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => setShowLinkSourceModal(true)}
+                            >
+                                + Link Source
+                            </button>
                         </div>
                         {sources.length === 0 ? (
                             <p className="text-sm text-muted">No sources linked yet.</p>
                         ) : (
                             <div className="space-y-4">
                                 {sources.map((source) => (
-                                    <div key={source._id} className="flex gap-4">
+                                    <div key={source._id} className="flex gap-4 group">
                                         <div className="flex-1 pb-4 border-l border-border-subtle pl-4 relative">
                                             <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-border" />
-                                            <div>
-                                                <Link
-                                                    to={`/tree/${treeId}/person/${personId}/source/${source._id}`}
-                                                    className="font-medium hover:text-accent"
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <Link
+                                                        to={`/tree/${treeId}/person/${personId}/source/${source._id}`}
+                                                        className="font-medium hover:text-accent"
+                                                    >
+                                                        {source.title}
+                                                    </Link>
+                                                    {source.author && (
+                                                        <p className="text-sm text-muted">by {source.author}</p>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    className="btn btn-ghost btn-sm text-error opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onClick={() => handleUnlinkSource(source._id)}
+                                                    title="Unlink source"
                                                 >
-                                                    {source.title}
-                                                </Link>
-                                                {source.author && (
-                                                    <p className="text-sm text-muted">by {source.author}</p>
-                                                )}
+                                                    Unlink
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -222,15 +312,33 @@ export function LifeEventPage() {
 
                     <section className="card p-6 space-y-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold">Media</h2>
-                            <span className="text-xs text-muted">{(media ?? []).length} items</span>
+                            <div>
+                                <h2 className="text-lg font-semibold">Media</h2>
+                                <span className="text-xs text-muted">{(media ?? []).length} items</span>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => setShowLinkMediaModal(true)}
+                            >
+                                + Link Media
+                            </button>
                         </div>
                         {(media ?? []).length === 0 ? (
                             <p className="text-sm text-muted">No media linked to this event yet.</p>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {(media ?? []).map((item) => (
-                                    <MediaCard key={item._id} media={item} />
+                                    <div key={item._id} className="relative group">
+                                        <MediaCard media={item} />
+                                        <button
+                                            className="absolute top-2 right-2 btn btn-ghost btn-sm text-error bg-card/80 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => handleUnlinkMedia(item._id)}
+                                            title="Unlink media"
+                                        >
+                                            Unlink
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         )}
@@ -308,12 +416,57 @@ export function LifeEventPage() {
             </div>
 
             {showEdit && (
-                <AddClaimModal
+                <LifeEventModal
                     treeId={treeId as Id<"trees">}
                     subjectId={personId}
                     subjectType="person"
                     initialClaim={resolvedClaim}
                     onClose={() => setShowEdit(false)}
+                />
+            )}
+
+            {showSourceModal && (
+                <SourceModal
+                    treeId={treeId as Id<"trees">}
+                    initialClaimIds={[claimId as Id<"claims">]}
+                    onClose={() => setShowSourceModal(false)}
+                    onSuccess={() => setShowSourceModal(false)}
+                />
+            )}
+
+            {showLinkSourceModal && treeId && (
+                <LinkSourceModal
+                    treeId={treeId as Id<"trees">}
+                    excludeSourceIds={(resolvedClaim?.sources ?? []).map(s => s._id)}
+                    onClose={() => setShowLinkSourceModal(false)}
+                    onSelect={handleLinkSource}
+                    onCreateNew={() => {
+                        setShowLinkSourceModal(false);
+                        setShowSourceModal(true);
+                    }}
+                />
+            )}
+
+            {showMediaUpload && (
+                <MediaUploadModal
+                    treeId={treeId as Id<"trees">}
+                    ownerPersonId={personId as Id<"people">}
+                    defaultLinks={[{ entityType: 'claim', entityId: claimId }]}
+                    onClose={() => setShowMediaUpload(false)}
+                    onSuccess={() => setShowMediaUpload(false)}
+                />
+            )}
+
+            {showLinkMediaModal && treeId && (
+                <LinkMediaModal
+                    treeId={treeId as Id<"trees">}
+                    excludeMediaIds={(media ?? []).map(m => m._id)}
+                    onClose={() => setShowLinkMediaModal(false)}
+                    onSelect={handleLinkMedia}
+                    onCreateNew={() => {
+                        setShowLinkMediaModal(false);
+                        setShowMediaUpload(true);
+                    }}
                 />
             )}
 
@@ -332,7 +485,7 @@ export function LifeEventPage() {
                             await removeClaim({ claimId: claimId as Id<"claims"> });
                             navigate(`/tree/${treeId}/person/${personId}`);
                         } catch (error) {
-                            handleError(error, { operation: 'delete claim' });
+                            handleErrorWithToast(error, { operation: 'delete claim' });
                             setDeleteError('Unable to delete this event. Please try again.');
                         } finally {
                             setIsDeleting(false);

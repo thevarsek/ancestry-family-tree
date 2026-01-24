@@ -3,9 +3,8 @@ import { useMutation, useQuery } from 'convex/react';
 import type { Doc, Id } from '../../../convex/_generated/dataModel';
 import { api } from '../../../convex/_generated/api';
 import { MediaCard } from './MediaCard';
-import { MediaUploadModal } from './MediaUploadModal';
+import { MediaModal } from './MediaModal';
 import { ConfirmModal } from '../ui/ConfirmModal';
-import type { PersonClaim } from '../../types/claims';
 import { handleError } from '../../utils/errorHandling';
 
 type MediaWithRelations = Doc<"media"> & {
@@ -17,16 +16,15 @@ type MediaWithRelations = Doc<"media"> & {
 export function MediaList({
     treeId,
     personId,
-    claims
 }: {
     treeId: Id<"trees">;
     personId: Id<"people">;
-    claims: PersonClaim[];
 }) {
     const media = useQuery(api.media.listByPerson, { personId }) as MediaWithRelations[] | undefined;
     const people = useQuery(api.people.list, { treeId, limit: 200 }) as Doc<"people">[] | undefined;
     const removeMedia = useMutation(api.media.remove);
-    const [showUpload, setShowUpload] = useState(false);
+    const [showAddMedia, setShowAddMedia] = useState(false);
+    const [editingMedia, setEditingMedia] = useState<MediaWithRelations | null>(null);
     const [pendingDelete, setPendingDelete] = useState<MediaWithRelations | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -71,7 +69,7 @@ export function MediaList({
                     <h2 className="text-xl font-bold">Media</h2>
                     <p className="text-muted text-sm">{media.length} items attached</p>
                 </div>
-                <button className="btn btn-primary btn-sm" onClick={() => setShowUpload(true)}>
+                <button className="btn btn-primary btn-sm" onClick={() => setShowAddMedia(true)}>
                     + Add Media
                 </button>
             </div>
@@ -84,7 +82,11 @@ export function MediaList({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {media.map((item: MediaWithRelations) => (
                         <div key={item._id} className="space-y-2">
-                            <MediaCard media={item} onDelete={() => handleRequestDelete(item)} />
+                            <MediaCard
+                                media={item}
+                                onEdit={() => setEditingMedia(item)}
+                                onDelete={() => handleRequestDelete(item)}
+                            />
                             {(item.taggedPersonIds?.length ?? 0) > 0 && (
                                 <div className="text-xs text-muted">
                                     Tagged: {item.taggedPersonIds
@@ -101,13 +103,12 @@ export function MediaList({
                 </div>
             )}
 
-            {showUpload && (
-                <MediaUploadModal
+            {showAddMedia && (
+                <MediaModal
                     treeId={treeId}
                     ownerPersonId={personId}
-                    claims={claims}
-                    onClose={() => setShowUpload(false)}
-                    onSuccess={() => setShowUpload(false)}
+                    onClose={() => setShowAddMedia(false)}
+                    onSuccess={() => setShowAddMedia(false)}
                 />
             )}
             {pendingDelete && (
@@ -120,6 +121,15 @@ export function MediaList({
                     errorMessage={deleteError}
                     onClose={handleCloseDelete}
                     onConfirm={handleConfirmDelete}
+                />
+            )}
+            {editingMedia && (
+                <MediaModal
+                    treeId={treeId}
+                    ownerPersonId={personId}
+                    initialMedia={editingMedia}
+                    onClose={() => setEditingMedia(null)}
+                    onSuccess={() => setEditingMedia(null)}
                 />
             )}
         </div>

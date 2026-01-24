@@ -3,10 +3,10 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useMutation } from "convex/react";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { api } from "../../../convex/_generated/api";
-import { AddRelationshipModal } from "../../components/people/AddRelationshipModal";
+import { RelationshipModal } from "../../components/people/RelationshipModal";
 import { PersonModal } from "../../components/people/PersonList";
 import { ProfilePhoto } from "../../components/people/ProfilePhoto";
-import { AddClaimModal } from "../../components/claims/AddClaimModal";
+import { LifeEventModal } from "../../components/claims/LifeEventModal";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import { PersonSourceList } from "../../components/sources/PersonSourceList";
 import { MediaList } from "../../components/media/MediaList";
@@ -255,7 +255,6 @@ export function PersonPage() {
                     <PersonSourceList
                         treeId={treeId as Id<"trees">}
                         personId={personId as Id<"people">}
-                        claims={person.claims as PersonClaim[]}
                     />
                 )}
 
@@ -263,14 +262,13 @@ export function PersonPage() {
                     <MediaList
                         treeId={treeId as Id<"trees">}
                         personId={personId as Id<"people">}
-                        claims={person.claims as PersonClaim[]}
                     />
                 )}
             </div>
 
             {/* Modals */}
             {showAddRel && (
-                <AddRelationshipModal
+                <RelationshipModal
                     treeId={treeId as Id<"trees">}
                     personId={personId as Id<"people">}
                     personName={`${person.givenNames} ${person.surnames}`}
@@ -288,7 +286,7 @@ export function PersonPage() {
             )}
 
             {showAddClaim && (
-                <AddClaimModal
+                <LifeEventModal
                     treeId={treeId as Id<"trees">}
                     subjectId={personId as string}
                     subjectType="person"

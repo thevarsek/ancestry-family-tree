@@ -3,12 +3,15 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Doc, Id } from '../../convex/_generated/dataModel';
-import { EditSourceModal } from '../components/sources/EditSourceModal';
+import { SourceModal } from '../components/sources/SourceModal';
 import { MediaCard } from '../components/media/MediaCard';
+import { MediaUploadModal } from '../components/media/MediaUploadModal';
+import { LinkMediaModal } from '../components/media/LinkMediaModal';
+import { LinkEventModal } from '../components/claims/LinkEventModal';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { formatClaimDate } from '../utils/claimDates';
 import { getClaimTitle } from '../utils/claimSorting';
-import { handleError } from '../utils/errorHandling';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 
 type SourceClaim = Doc<"claims"> & {
     place?: Doc<"places"> | null;
@@ -28,10 +31,23 @@ export function SourcePage() {
         personId?: string;
     }>();
     const navigate = useNavigate();
+    const { handleErrorWithToast, showSuccess } = useErrorHandler();
+
+    // Modal state
     const [showEdit, setShowEdit] = useState(false);
+    const [showLinkEventModal, setShowLinkEventModal] = useState(false);
+    const [showLinkMediaModal, setShowLinkMediaModal] = useState(false);
+    const [showMediaUpload, setShowMediaUpload] = useState(false);
     const [pendingDelete, setPendingDelete] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+
+    // Mutations
+    const addSourceToClaim = useMutation(api.claims.links.addSource);
+    const removeSourceFromClaim = useMutation(api.claims.links.removeSource);
+    const linkMediaToSource = useMutation(api.media.linkToEntity);
+    const unlinkMediaFromSource = useMutation(api.media.unlinkFromEntity);
+    const removeSource = useMutation(api.sources.remove);
 
     const source = useQuery(
         api.sources.getWithClaims,
@@ -54,8 +70,6 @@ export function SourcePage() {
             : 'skip'
     ) as MediaWithUrl[] | undefined;
 
-    const removeSource = useMutation(api.sources.remove);
-
     const sortedClaims = useMemo(() => {
         return (source?.claims ?? []).slice().sort((a, b) => {
             const aDate = a.value.date ?? a.value.dateEnd ?? '';
@@ -63,6 +77,62 @@ export function SourcePage() {
             return aDate.localeCompare(bDate);
         });
     }, [source]);
+
+    // Handlers for linking/unlinking events
+    const handleLinkEvent = async (claimId: Id<"claims">) => {
+        if (!sourceId) return;
+        try {
+            await addSourceToClaim({
+                claimId,
+                sourceId: sourceId as Id<"sources">,
+            });
+            showSuccess('Event linked to source');
+        } catch (err) {
+            handleErrorWithToast(err, { operation: 'link event' });
+        }
+    };
+
+    const handleUnlinkEvent = async (claimId: string) => {
+        if (!sourceId) return;
+        try {
+            await removeSourceFromClaim({
+                claimId: claimId as Id<"claims">,
+                sourceId: sourceId as Id<"sources">,
+            });
+            showSuccess('Event unlinked from source');
+        } catch (err) {
+            handleErrorWithToast(err, { operation: 'unlink event' });
+        }
+    };
+
+    // Handlers for linking/unlinking media
+    const handleLinkMedia = async (mediaId: Id<"media">) => {
+        if (!sourceId) return;
+        try {
+            await linkMediaToSource({
+                mediaId,
+                entityType: 'source',
+                entityId: sourceId,
+            });
+            showSuccess('Media linked to source');
+        } catch (err) {
+            handleErrorWithToast(err, { operation: 'link media' });
+        }
+    };
+
+    const handleUnlinkMedia = async (mediaId: string) => {
+        if (!sourceId) return;
+        try {
+            await unlinkMediaFromSource({
+                mediaId: mediaId as Id<"media">,
+                entityType: 'source',
+                entityId: sourceId,
+            });
+            showSuccess('Media unlinked from source');
+        } catch (err) {
+            handleErrorWithToast(err, { operation: 'unlink media' });
+        }
+    };
 
     if (source === undefined || (personId && person === undefined)) {
         return <div className="spinner spinner-lg mx-auto mt-12" />;
@@ -149,8 +219,17 @@ export function SourcePage() {
 
                     <section className="card p-6 space-y-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold">Linked Events</h2>
-                            <span className="text-xs text-muted">{sortedClaims.length} linked</span>
+                            <div>
+                                <h2 className="text-lg font-semibold">Linked Events</h2>
+                                <span className="text-xs text-muted">{sortedClaims.length} linked</span>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => setShowLinkEventModal(true)}
+                            >
+                                + Link Event
+                            </button>
                         </div>
                         {sortedClaims.length === 0 ? (
                             <p className="text-sm text-muted">No events linked to this source yet.</p>
@@ -165,29 +244,38 @@ export function SourcePage() {
                                         : undefined;
 
                                     return (
-                                        <div key={claim._id} className="flex gap-4">
+                                        <div key={claim._id} className="flex gap-4 group">
                                             <div className="flex-1 pb-4 border-l border-border-subtle pl-4 relative">
                                                 <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-border" />
-                                                <div>
-                                                    {linkTarget ? (
-                                                        <Link
-                                                            to={linkTarget}
-                                                            className="font-medium hover:text-accent capitalize"
-                                                        >
-                                                            {claimTitle}
-                                                        </Link>
-                                                    ) : (
-                                                        <span className="font-medium capitalize">{claimTitle}</span>
-                                                    )}
-                                                    <p className="text-sm text-muted">{claimDate}</p>
-                                                    {claimPerson && (
-                                                        <p className="text-sm text-muted">
-                                                            {claimPerson.givenNames} {claimPerson.surnames}
-                                                        </p>
-                                                    )}
-                                                    {claim.place?.displayName && (
-                                                        <p className="text-sm text-muted">{claim.place.displayName}</p>
-                                                    )}
+                                                <div className="flex items-start justify-between">
+                                                    <div>
+                                                        {linkTarget ? (
+                                                            <Link
+                                                                to={linkTarget}
+                                                                className="font-medium hover:text-accent capitalize"
+                                                            >
+                                                                {claimTitle}
+                                                            </Link>
+                                                        ) : (
+                                                            <span className="font-medium capitalize">{claimTitle}</span>
+                                                        )}
+                                                        <p className="text-sm text-muted">{claimDate}</p>
+                                                        {claimPerson && (
+                                                            <p className="text-sm text-muted">
+                                                                {claimPerson.givenNames} {claimPerson.surnames}
+                                                            </p>
+                                                        )}
+                                                        {claim.place?.displayName && (
+                                                            <p className="text-sm text-muted">{claim.place.displayName}</p>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        className="btn btn-ghost btn-sm text-error opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        onClick={() => handleUnlinkEvent(claim._id)}
+                                                        title="Unlink event"
+                                                    >
+                                                        Unlink
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
@@ -201,15 +289,33 @@ export function SourcePage() {
                 <div className="space-y-6">
                     <section className="card p-4 space-y-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-base font-semibold">Media</h2>
-                            <span className="text-xs text-muted">{(media ?? []).length} items</span>
+                            <div>
+                                <h2 className="text-base font-semibold">Media</h2>
+                                <span className="text-xs text-muted">{(media ?? []).length} items</span>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => setShowLinkMediaModal(true)}
+                            >
+                                + Link Media
+                            </button>
                         </div>
                         {(media ?? []).length === 0 ? (
                             <p className="text-sm text-muted">No media linked to this source yet.</p>
                         ) : (
                             <div className="space-y-3">
                                 {(media ?? []).map((item) => (
-                                    <MediaCard key={item._id} media={item} />
+                                    <div key={item._id} className="relative group">
+                                        <MediaCard media={item} />
+                                        <button
+                                            className="absolute top-2 right-2 btn btn-ghost btn-sm text-error bg-card/80 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => handleUnlinkMedia(item._id)}
+                                            title="Unlink media"
+                                        >
+                                            Unlink
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         )}
@@ -217,11 +323,46 @@ export function SourcePage() {
                 </div>
             </div>
 
-            {showEdit && (
-                <EditSourceModal
-                    source={source}
+            {showEdit && source && treeId && (
+                <SourceModal
+                    treeId={treeId as Id<"trees">}
+                    initialSource={source}
+                    initialClaimIds={sortedClaims.map(c => c._id)}
+                    initialMediaIds={(media ?? []).map(m => m._id)}
                     onClose={() => setShowEdit(false)}
                     onSuccess={() => setShowEdit(false)}
+                />
+            )}
+
+            {showLinkEventModal && treeId && (
+                <LinkEventModal
+                    treeId={treeId as Id<"trees">}
+                    excludeClaimIds={sortedClaims.map(c => c._id)}
+                    onClose={() => setShowLinkEventModal(false)}
+                    onSelect={handleLinkEvent}
+                />
+            )}
+
+            {showLinkMediaModal && treeId && (
+                <LinkMediaModal
+                    treeId={treeId as Id<"trees">}
+                    excludeMediaIds={(media ?? []).map(m => m._id)}
+                    onClose={() => setShowLinkMediaModal(false)}
+                    onSelect={handleLinkMedia}
+                    onCreateNew={() => {
+                        setShowLinkMediaModal(false);
+                        setShowMediaUpload(true);
+                    }}
+                />
+            )}
+
+            {showMediaUpload && treeId && personId && (
+                <MediaUploadModal
+                    treeId={treeId as Id<"trees">}
+                    ownerPersonId={personId as Id<"people">}
+                    defaultLinks={[{ entityType: 'source', entityId: sourceId }]}
+                    onClose={() => setShowMediaUpload(false)}
+                    onSuccess={() => setShowMediaUpload(false)}
                 />
             )}
 
@@ -244,7 +385,7 @@ export function SourcePage() {
                                 navigate(`/tree/${treeId}`);
                             }
                         } catch (error) {
-                            handleError(error, { operation: 'delete source' });
+                            handleErrorWithToast(error, { operation: 'delete source' });
                             setDeleteError('Unable to delete this source. Please try again.');
                         } finally {
                             setIsDeleting(false);

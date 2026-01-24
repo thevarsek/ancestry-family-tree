@@ -8,6 +8,31 @@ import { requireTreeAccess } from "./lib/auth";
 import { linkEntityValidator } from "./lib/mediaHelpers";
 
 /**
+ * List all media in a tree
+ */
+export const listByTree = query({
+    args: {
+        treeId: v.id("trees"),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        await requireTreeAccess(ctx, args.treeId);
+
+        const media = await ctx.db
+            .query("media")
+            .withIndex("by_tree", (q) => q.eq("treeId", args.treeId))
+            .take(args.limit ?? 200);
+
+        return Promise.all(
+            media.map(async (item) => ({
+                ...item,
+                storageUrl: item.storageId ? await ctx.storage.getUrl(item.storageId) : undefined,
+            }))
+        );
+    },
+});
+
+/**
  * List all media for a person (owned + tagged)
  */
 export const listByPerson = query({
